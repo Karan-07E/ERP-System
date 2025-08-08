@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
-    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start": "cd backend && npm start",
     "start:backend": "cd backend && npm start",
     "start:frontend": "cd frontend && npm start",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -14,7 +14,8 @@
     "seed": "cd backend && node scripts/seed.js",
     "migrate": "cd backend && node scripts/migrate.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "cd frontend && npm run build",
+    "build": "cd frontend && npm install && npm run build",
+    "build:frontend": "cd frontend && npm install && npm run build",
     "clean": "rm -rf node_modules backend/node_modules frontend/node_modules",
     "clean:install": "npm run clean && npm run install:all"
   },

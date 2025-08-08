@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "npm install && node scripts/migrate.js",
+    "build": "npm install",
+    "postinstall": "node scripts/migrate.js",
     "test": "jest",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js"
