@@ -62,16 +62,40 @@ app.use(fileUpload({
 // Static files
 app.use('/uploads', express.static('uploads'));
 
-// Database connection
-sequelize.authenticate()
-.then(() => {
-  console.log('Connected to PostgreSQL');
-  return sequelize.sync({ force: false }); // Set to true to drop and recreate tables
-})
-.then(() => {
-  console.log('Database synchronized');
-})
-.catch(err => console.error('PostgreSQL connection error:', err));
+// Database connection and migration
+async function initializeDatabase() {
+  try {
+    console.log('Connecting to PostgreSQL...');
+    await sequelize.authenticate();
+    console.log('Connected to PostgreSQL');
+    
+    // Run migrations in production
+    if (process.env.NODE_ENV === 'production') {
+      console.log('Running database migrations...');
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      
+      try {
+        await execAsync('node scripts/migrate.js', { cwd: __dirname });
+        console.log('Database migrations completed');
+      } catch (migrationError) {
+        console.log('Migration script not found or failed, running sync...');
+        await sequelize.sync({ alter: true });
+        console.log('Database synchronized');
+      }
+    } else {
+      await sequelize.sync({ force: false });
+      console.log('Database synchronized');
+    }
+  } catch (err) {
+    console.error('Database initialization error:', err);
+    process.exit(1);
+  }
+}
+
+// Initialize database before starting server
+initializeDatabase();
 
 // Socket.IO for real-time messaging
 io.on('connection', (socket) => {
