@@ -157,15 +157,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    message: 'Something went wrong!', 
-    error: process.env.NODE_ENV === 'development' ? err.message : {}
-  });
-});
-
 // Serve React static files in production
 if (process.env.NODE_ENV === 'production') {
   const path = require('path');
@@ -177,8 +168,19 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
   });
-} else {
-  // 404 handler for development
+}
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ 
+    message: 'Something went wrong!', 
+    error: process.env.NODE_ENV === 'development' ? err.message : {}
+  });
+});
+
+// 404 handler for development
+if (process.env.NODE_ENV !== 'production') {
   app.use('*', (req, res) => {
     res.status(404).json({ message: 'Route not found' });
   });
