@@ -189,8 +189,12 @@ if (process.env.NODE_ENV === 'production') {
   // Serve static files from React build
   app.use(express.static(path.join(__dirname, '../frontend/build')));
   
-  // Handle React routing, return all requests to React app
-  app.get('*', (req, res) => {
+  // Handle React routing, return all requests to React app (EXCEPT API routes)
+  app.get('*', (req, res, next) => {
+    // Don't handle API routes - let them pass through
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
     res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
   });
 }
