@@ -188,15 +188,6 @@ if (process.env.NODE_ENV === 'production') {
   
   // Serve static files from React build
   app.use(express.static(path.join(__dirname, '../frontend/build')));
-  
-  // Handle React routing, return all requests to React app (EXCEPT API routes)
-  app.get('*', (req, res, next) => {
-    // Don't handle API routes - let them pass through
-    if (req.path.startsWith('/api/')) {
-      return next();
-    }
-    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
-  });
 }
 
 // Error handling middleware
@@ -208,8 +199,19 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler for development
-if (process.env.NODE_ENV !== 'production') {
+// Serve React app for all non-API routes in production
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  app.get('*', (req, res) => {
+    // Only serve React app for non-API routes
+    if (!req.path.startsWith('/api/')) {
+      res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+    } else {
+      res.status(404).json({ message: 'API route not found' });
+    }
+  });
+} else {
+  // 404 handler for development
   app.use('*', (req, res) => {
     res.status(404).json({ message: 'Route not found' });
   });
