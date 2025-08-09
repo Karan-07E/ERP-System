@@ -24,6 +24,12 @@ const messageRoutes = require('./routes/messages');
 
 const app = express();
 const server = createServer(app);
+
+// Simple test route - should work before any middleware
+app.get('/test', (req, res) => {
+  res.json({ message: 'Server is working!', timestamp: new Date().toISOString() });
+});
+
 const io = new Server(server, {
   cors: {
     origin: process.env.CORS_ORIGIN || "http://localhost:3000",
