@@ -3,7 +3,7 @@ import axios from 'axios';
 // Configure axios for API calls
 const API_BASE_URL = process.env.REACT_APP_API_URL || (
   process.env.NODE_ENV === 'production' 
-    ? 'https://your-backend-name.onrender.com'
+    ? 'https://eee111.onrender.com'
     : 'http://localhost:5000'
 );
 
