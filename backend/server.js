@@ -152,7 +152,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/messages', messageRoutes);
 
-// API Health check
+// API Health check - v2
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
