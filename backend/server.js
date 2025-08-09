@@ -157,6 +157,31 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Seed database endpoint (for initial setup)
+app.post('/api/seed', async (req, res) => {
+  try {
+    console.log('Running database seed...');
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    
+    await execAsync('node scripts/seed.js', { cwd: __dirname });
+    res.json({ 
+      success: true, 
+      message: 'Database seeded successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Seed error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to seed database',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Serve React static files in production
 if (process.env.NODE_ENV === 'production') {
   const path = require('path');
