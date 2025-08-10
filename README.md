@@ -69,8 +69,6 @@ npm start
 ```
 
 **send a post req to seed.js via postman or any other**
-```purpose is to seed the database with sample data
-```
 
 **Frontend** (Terminal 2):
 ```bash
