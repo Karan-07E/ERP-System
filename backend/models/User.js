@@ -8,6 +8,11 @@ const User = sequelize.define('User', {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true
   },
+  userId: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    unique: true
+  },
   username: {
     type: DataTypes.STRING(50),
     allowNull: false,
@@ -39,13 +44,23 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  role: {
-    type: DataTypes.ENUM('admin', 'accountant', 'production', 'manager'),
-    defaultValue: 'production'
+  roles: {
+    type: DataTypes.JSONB,
+    defaultValue: ['production'],
+    allowNull: false
   },
   permissions: {
     type: DataTypes.JSONB,
     defaultValue: []
+  },
+  department: {
+    type: DataTypes.STRING(100)
+  },
+  designation: {
+    type: DataTypes.STRING(100)
+  },
+  employeeCode: {
+    type: DataTypes.STRING(20)
   },
   isActive: {
     type: DataTypes.BOOLEAN,
@@ -63,6 +78,15 @@ const User = sequelize.define('User', {
   address: {
     type: DataTypes.JSONB,
     defaultValue: {}
+  },
+  // Job tracking preferences
+  skillSet: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
+  workloadCapacity: {
+    type: DataTypes.INTEGER,
+    defaultValue: 5
   }
 }, {
   tableName: 'users',

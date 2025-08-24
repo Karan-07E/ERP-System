@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
-// Order Model
+// Enhanced Order Model with Party support and GST compliance
 const Order = sequelize.define('Order', {
   id: {
     type: DataTypes.UUID,
@@ -13,10 +13,24 @@ const Order = sequelize.define('Order', {
     allowNull: false,
     unique: true
   },
+  poNumber: {
+    type: DataTypes.STRING(50),
+    allowNull: false
+  },
   type: {
     type: DataTypes.ENUM('sales_order', 'purchase_order'),
     allowNull: false
   },
+  // Updated to use Party instead of separate customer/vendor
+  partyId: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: 'parties',
+      key: 'id'
+    }
+  },
+  // Keeping legacy fields for backward compatibility during migration
   customer: {
     type: DataTypes.UUID,
     references: {
@@ -46,9 +60,22 @@ const Order = sequelize.define('Order', {
     type: DataTypes.JSONB,
     defaultValue: []
   },
+  // Enhanced GST calculations
   subtotal: {
     type: DataTypes.DECIMAL(15, 2),
     allowNull: false
+  },
+  cgstAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  sgstAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  igstAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
   },
   totalGst: {
     type: DataTypes.DECIMAL(15, 2),
@@ -58,13 +85,28 @@ const Order = sequelize.define('Order', {
     type: DataTypes.DECIMAL(15, 2),
     allowNull: false
   },
+  // Enhanced status management
   status: {
-    type: DataTypes.ENUM('draft', 'confirmed', 'in_production', 'ready_to_ship', 'shipped', 'delivered', 'completed', 'cancelled'),
-    defaultValue: 'draft'
+    type: DataTypes.ENUM('open', 'processing', 'hold', 'completed', 'cancelled', 'draft', 'confirmed', 'in_production', 'ready_to_ship', 'shipped', 'delivered'),
+    defaultValue: 'open'
   },
   priority: {
     type: DataTypes.ENUM('low', 'medium', 'high', 'urgent'),
     defaultValue: 'medium'
+  },
+  // Additional compliance fields
+  hsnSummary: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
+  paymentTerms: {
+    type: DataTypes.STRING(255)
+  },
+  deliveryTerms: {
+    type: DataTypes.STRING(255)
+  },
+  specialInstructions: {
+    type: DataTypes.TEXT
   },
   notes: {
     type: DataTypes.TEXT
@@ -80,10 +122,38 @@ const Order = sequelize.define('Order', {
       model: 'users',
       key: 'id'
     }
+  },
+  // Flags for dashboard
+  hasNegativeFlag: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  flagReason: {
+    type: DataTypes.STRING
   }
 }, {
   tableName: 'orders',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    {
+      fields: ['order_number']
+    },
+    {
+      fields: ['po_number']
+    },
+    {
+      fields: ['party_id']
+    },
+    {
+      fields: ['status']
+    },
+    {
+      fields: ['order_date']
+    },
+    {
+      fields: ['has_negative_flag']
+    }
+  ]
 });
 
 // Job Card Model

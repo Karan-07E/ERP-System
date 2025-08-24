@@ -84,10 +84,10 @@ Process.hasMany(QualityControl, { foreignKey: 'process', as: 'qualityControls' }
 Process.hasMany(InspectionReport, { foreignKey: 'process', as: 'inspectionReports' });
 
 Conversation.hasMany(Message, { foreignKey: 'conversation', as: 'messages' });
-Message.belongsTo(Conversation, { foreignKey: 'conversation', as: 'conversationData' });
+Message.belongsTo(Conversation, { foreignKey: 'conversation', as: 'conversation' });
 
 User.hasMany(Notification, { foreignKey: 'user', as: 'notifications' });
-Notification.belongsTo(User, { foreignKey: 'user', as: 'userData' });
+Notification.belongsTo(User, { foreignKey: 'user', as: 'user' });
 
 // Sync all models
 sequelize.sync({ force: false })

@@ -1,5 +1,14 @@
 const express = require('express');
-const { Order } = require('../models/Order');
+const { 
+  Order,
+  Job,
+  Party,
+  OrderItem,
+  Material,
+  User,
+  InternalMessage,
+  COC
+} = require('../models');
 const { Invoice } = require('../models/Accounting');
 const { Inventory } = require('../models/Inventory');
 const { Process } = require('../models/Process');

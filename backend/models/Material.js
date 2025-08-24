@@ -1,6 +1,188 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
+// Enhanced Material Model with alerts
+const Material = sequelize.define('Material', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
+  materialCode: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    unique: true
+  },
+  name: {
+    type: DataTypes.STRING(255),
+    allowNull: false
+  },
+  description: {
+    type: DataTypes.TEXT
+  },
+  category: {
+    type: DataTypes.STRING(100)
+  },
+  type: {
+    type: DataTypes.ENUM('raw_material', 'semi_finished', 'finished_goods', 'consumables'),
+    allowNull: false
+  },
+  unit: {
+    type: DataTypes.STRING(20),
+    allowNull: false
+  },
+  currentStock: {
+    type: DataTypes.DECIMAL(15, 3),
+    defaultValue: 0
+  },
+  minimumStock: {
+    type: DataTypes.DECIMAL(15, 3),
+    defaultValue: 0
+  },
+  maximumStock: {
+    type: DataTypes.DECIMAL(15, 3),
+    defaultValue: 0
+  },
+  reorderLevel: {
+    type: DataTypes.DECIMAL(15, 3),
+    defaultValue: 0
+  },
+  standardCost: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  averageCost: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  lastPurchaseCost: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  // Stock alerts
+  lowStockAlert: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  isLowStock: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  expiryDate: {
+    type: DataTypes.DATEONLY
+  },
+  expiryAlert: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
+  // HSN and GST
+  hsnCode: {
+    type: DataTypes.STRING(10)
+  },
+  gstRate: {
+    type: DataTypes.DECIMAL(5, 2),
+    defaultValue: 0
+  },
+  // Storage details
+  storageLocation: {
+    type: DataTypes.STRING(100)
+  },
+  storageConditions: {
+    type: DataTypes.TEXT
+  },
+  // Quality specifications
+  qualityParameters: {
+    type: DataTypes.JSONB,
+    defaultValue: {}
+  },
+  certifications: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
+  // Supplier information
+  preferredSupplierId: {
+    type: DataTypes.UUID,
+    references: {
+      model: 'parties',
+      key: 'id'
+    }
+  },
+  alternativeSuppliers: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
+  leadTime: {
+    type: DataTypes.INTEGER, // in days
+    defaultValue: 0
+  },
+  isActive: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
+  notes: {
+    type: DataTypes.TEXT
+  },
+  attachments: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
+  createdBy: {
+    type: DataTypes.UUID,
+    allowNull: false,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  }
+}, {
+  tableName: 'materials',
+  timestamps: true,
+  hooks: {
+    beforeSave: (material) => {
+      // Check for low stock
+      if (material.currentStock <= material.reorderLevel) {
+        material.isLowStock = true;
+      } else {
+        material.isLowStock = false;
+      }
+      
+      // Check for expiry alert (30 days before expiry)
+      if (material.expiryDate) {
+        const today = new Date();
+        const thirtyDaysFromNow = new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000));
+        if (new Date(material.expiryDate) <= thirtyDaysFromNow) {
+          material.expiryAlert = true;
+        } else {
+          material.expiryAlert = false;
+        }
+      }
+    }
+  },
+  indexes: [
+    {
+      fields: ['material_code']
+    },
+    {
+      fields: ['name']
+    },
+    {
+      fields: ['category']
+    },
+    {
+      fields: ['type']
+    },
+    {
+      fields: ['is_low_stock']
+    },
+    {
+      fields: ['expiry_alert']
+    },
+    {
+      fields: ['hsn_code']
+    }
+  ]
+});
+
 // BOM (Bill of Materials) Model
 const BOM = sequelize.define('BOM', {
   id: {
@@ -268,6 +450,7 @@ const MaterialConsumption = sequelize.define('MaterialConsumption', {
 });
 
 module.exports = {
+  Material,
   BOM,
   MaterialSpecification,
   MaterialConsumption

@@ -10,17 +10,22 @@ const fileUpload = require('express-fileupload');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 
-// Import Routes
+// Import routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
-const accountingRoutes = require('./routes/accounting');
 const orderRoutes = require('./routes/orders');
 const inventoryRoutes = require('./routes/inventory');
 const materialRoutes = require('./routes/materials');
 const processRoutes = require('./routes/processes');
-const dashboardRoutes = require('./routes/dashboard');
 const auditRoutes = require('./routes/audit');
+const accountingRoutes = require('./routes/accounting');
 const messageRoutes = require('./routes/messages');
+const partyRoutes = require('./routes/parties');
+const jobRoutes = require('./routes/jobs');
+const dashboardRoutes = require('./routes/dashboard');
+const cocRoutes = require('./routes/coc');
+const backupRoutes = require('./routes/backup');
+const analyticsRoutes = require('./routes/analytics');
 
 const app = express();
 const server = createServer(app);
@@ -75,33 +80,36 @@ async function initializeDatabase() {
     await sequelize.authenticate();
     console.log('Connected to PostgreSQL');
     
-    // Run migrations in production
-    if (process.env.NODE_ENV === 'production') {
-      console.log('Running database migrations...');
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      try {
-        await execAsync('node scripts/migrate.js', { cwd: __dirname });
-        console.log('Database migrations completed');
-      } catch (migrationError) {
-        console.log('Migration script not found or failed, running sync...');
-        await sequelize.sync({ alter: true });
-        console.log('Database synchronized');
-      }
-    } else {
-      await sequelize.sync({ force: false });
-      console.log('Database synchronized');
-    }
+    // Skip sync since enhanced migration was already run
+    console.log('Database already synchronized via enhanced migration script');
+    console.log('Database initialization completed successfully');
   } catch (err) {
     console.error('Database initialization error:', err);
+    throw err; // Don't exit process, let caller handle it
+  }
+}
+
+// Start server function
+async function startServer() {
+  try {
+    // Initialize database first
+    await initializeDatabase();
+    
+    // Start the HTTP server
+    const PORT = process.env.PORT || 5000;
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔗 Frontend URL: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
+    });
+  } catch (err) {
+    console.error('Failed to start server:', err);
     process.exit(1);
   }
 }
 
-// Initialize database before starting server
-initializeDatabase();
+// Start the server
+startServer();
 
 // Socket.IO for real-time messaging
 io.on('connection', (socket) => {
@@ -157,6 +165,13 @@ app.use('/api/processes', processRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/messages', messageRoutes);
+
+// New enhanced routes
+app.use('/api/parties', require('./routes/parties'));
+app.use('/api/jobs', require('./routes/jobs'));
+app.use('/api/coc', require('./routes/coc'));
+app.use('/api/backup', require('./routes/backup'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // API Health check - v2
 app.get('/api/health', (req, res) => {
@@ -222,10 +237,5 @@ if (process.env.NODE_ENV === 'production') {
     res.status(404).json({ message: 'Route not found' });
   });
 }
-
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
 
 module.exports = app;

@@ -13,6 +13,11 @@ import Processes from './pages/Processes';
 import Audit from './pages/Audit';
 import Messages from './pages/Messages';
 import Users from './pages/Users';
+import Parties from './pages/Parties';
+import EnhancedDashboard from './pages/EnhancedDashboard';
+import COC from './pages/COC';
+import BackupRestore from './pages/BackupRestore';
+import Analytics from './pages/Analytics';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -72,6 +77,10 @@ function App() {
               <Route path="audit/*" element={<Audit />} />
               <Route path="messages/*" element={<Messages />} />
               <Route path="users/*" element={<Users />} />
+              <Route path="parties/*" element={<Parties />} />
+              <Route path="coc/*" element={<COC />} />
+              <Route path="backup/*" element={<BackupRestore />} />
+              <Route path="analytics/*" element={<Analytics />} />
             </Route>
           </Routes>
         </div>

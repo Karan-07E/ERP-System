@@ -9,7 +9,11 @@ import {
   Cog, 
   FileCheck, 
   MessageSquare, 
-  Users 
+  Users,
+  Building2,
+  Shield,
+  Database,
+  TrendingUp
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen }) => {
@@ -25,6 +29,11 @@ const Sidebar = ({ isOpen }) => {
       path: '/orders',
       icon: ShoppingCart,
       label: 'Orders'
+    },
+    {
+      path: '/parties',
+      icon: Building2,
+      label: 'Parties'
     },
     {
       path: '/inventory',
@@ -47,6 +56,11 @@ const Sidebar = ({ isOpen }) => {
       label: 'Processes'
     },
     {
+      path: '/coc',
+      icon: Shield,
+      label: 'COC'
+    },
+    {
       path: '/audit',
       icon: FileCheck,
       label: 'Audit'
@@ -60,6 +74,16 @@ const Sidebar = ({ isOpen }) => {
       path: '/users',
       icon: Users,
       label: 'Users'
+    },
+    {
+      path: '/backup',
+      icon: Database,
+      label: 'Backup'
+    },
+    {
+      path: '/analytics',
+      icon: TrendingUp,
+      label: 'Analytics'
     }
   ];
 
