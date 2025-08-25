@@ -17,7 +17,6 @@ const orderRoutes = require('./routes/orders');
 const inventoryRoutes = require('./routes/inventory');
 const materialRoutes = require('./routes/materials');
 const processRoutes = require('./routes/processes');
-const auditRoutes = require('./routes/audit');
 const accountingRoutes = require('./routes/accounting');
 const messageRoutes = require('./routes/messages');
 const partyRoutes = require('./routes/parties');
@@ -163,7 +162,6 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/materials', materialRoutes);
 app.use('/api/processes', processRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/audit', auditRoutes);
 app.use('/api/messages', messageRoutes);
 
 // New enhanced routes

@@ -12,7 +12,6 @@ const {
 const { Invoice } = require('../models/Accounting');
 const { Inventory } = require('../models/Inventory');
 const { Process } = require('../models/Process');
-const { AuditReport } = require('../models/Audit');
 const { auth, checkPermission } = require('../middleware/auth');
 const { Op } = require('sequelize');
 const router = express.Router();

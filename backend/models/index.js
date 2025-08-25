@@ -6,7 +6,6 @@ const { Customer, Vendor, Item, Invoice, Quotation, Payment } = require('./Accou
 const { Order, JobCard, DeliveryChallan } = require('./Order');
 const { Inventory, StockMovement, GRN, GatePass } = require('./Inventory');
 const { Process, QualityControl, InspectionReport } = require('./Process');
-const { AuditReport, StandardAuditForm, AuditFormResponse } = require('./Audit');
 const { Message, Conversation, Notification, BroadcastMessage } = require('./Message');
 
 // Import new enhanced models
@@ -25,7 +24,6 @@ User.hasMany(Order, { foreignKey: 'createdBy', as: 'createdOrders' });
 User.hasMany(Process, { foreignKey: 'createdBy', as: 'createdProcesses' });
 User.hasMany(QualityControl, { foreignKey: 'checkedBy', as: 'qualityChecks' });
 User.hasMany(InspectionReport, { foreignKey: 'inspector', as: 'inspectionReports' });
-User.hasMany(AuditReport, { foreignKey: 'createdBy', as: 'auditReports' });
 User.hasMany(Message, { foreignKey: 'sender', as: 'sentMessages' });
 User.hasMany(Message, { foreignKey: 'receiver', as: 'receivedMessages' });
 
@@ -120,9 +118,6 @@ module.exports = {
   Process,
   QualityControl,
   InspectionReport,
-  AuditReport,
-  StandardAuditForm,
-  AuditFormResponse,
   Message,
   Conversation,
   Notification,

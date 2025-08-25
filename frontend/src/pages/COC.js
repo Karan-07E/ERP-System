@@ -190,71 +190,84 @@ const COC = () => {
   };
 
   return (
-    <div className="container mx-auto p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Certificate of Conformance</h1>
-          <p className="text-gray-600">Manage quality certificates and compliance documents</p>
-        </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <Plus size={20} />
-          Create COC
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search by COC number, job, or order..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                <FileText className="text-blue-600" size={32} />
+                Certificate of Conformance
+              </h1>
+              <p className="text-gray-600 mt-2">Manage quality certificates and compliance documents</p>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="approved">Approved</option>
-            </select>
             <button
-              onClick={fetchCOCs}
-              className="p-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50"
+              onClick={() => setShowCreateModal(true)}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
             >
-              <RefreshCw size={20} />
+              <Plus size={20} />
+              Create COC
             </button>
           </div>
         </div>
-      </div>
 
-      {/* COC List */}
-      <div className="bg-white rounded-lg shadow-sm">
-        {loading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading COCs...</p>
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="Search by COC number, job, or order..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-[140px]"
+              >
+                <option value="">All Status</option>
+                <option value="draft">Draft</option>
+                <option value="approved">Approved</option>
+              </select>
+              <button
+                onClick={fetchCOCs}
+                className="p-3 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <RefreshCw size={20} />
+              </button>
+            </div>
           </div>
-        ) : cocs.length === 0 ? (
-          <div className="p-8 text-center">
-            <FileText size={48} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No COCs found</h3>
-            <p className="text-gray-600">Create your first Certificate of Conformance to get started.</p>
-          </div>
-        ) : (
+        </div>
+
+        {/* COC List */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          {loading ? (
+            <div className="p-12 text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-6 text-gray-600 text-lg">Loading COCs...</p>
+            </div>
+          ) : cocs.length === 0 ? (
+            <div className="p-12 text-center">
+              <FileText size={64} className="mx-auto text-gray-300 mb-6" />
+              <h3 className="text-xl font-medium text-gray-900 mb-3">No COCs found</h3>
+              <p className="text-gray-600 mb-6">Create your first Certificate of Conformance to get started.</p>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
+              >
+                <Plus size={20} />
+                Create COC
+              </button>
+            </div>
+          ) : (
           <>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -315,20 +328,20 @@ const COC = () => {
                         {formatDate(coc.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           <button
                             onClick={() => {
                               setSelectedCOC(coc);
                               setShowViewModal(true);
                             }}
-                            className="text-blue-600 hover:text-blue-800"
+                            className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-md transition-colors"
                             title="View Details"
                           >
                             <Eye size={16} />
                           </button>
                           <button
                             onClick={() => handleDownloadPDF(coc.id, coc.cocNumber)}
-                            className="text-green-600 hover:text-green-800"
+                            className="text-green-600 hover:text-green-800 p-2 hover:bg-green-50 rounded-md transition-colors"
                             title="Download PDF"
                           >
                             <Download size={16} />
@@ -336,7 +349,7 @@ const COC = () => {
                           {coc.status === 'draft' && (
                             <button
                               onClick={() => handleApproveCOC(coc.id)}
-                              className="text-purple-600 hover:text-purple-800"
+                              className="text-purple-600 hover:text-purple-800 p-2 hover:bg-purple-50 rounded-md transition-colors"
                               title="Approve COC"
                             >
                               <Check size={16} />
@@ -402,17 +415,21 @@ const COC = () => {
 
       {/* Create COC Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Create Certificate of Conformance</h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={24} />
-              </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative bg-white rounded-xl shadow-2xl w-11/12 md:w-3/4 lg:w-1/2 max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-semibold">Create Certificate of Conformance</h3>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-white hover:text-gray-200 transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
             </div>
+            
+            <div className="p-6">
 
             <form onSubmit={handleCreateCOC} className="space-y-4">
               <div>
@@ -579,41 +596,46 @@ const COC = () => {
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-colors"
                 >
                   Create COC
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* View COC Modal */}
       {showViewModal && selectedCOC && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 shadow-lg rounded-md bg-white">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                Certificate of Conformance - {selectedCOC.cocNumber}
-              </h3>
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={24} />
-              </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative bg-white rounded-xl shadow-2xl w-11/12 md:w-3/4 lg:w-2/3 max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-semibold">
+                  Certificate of Conformance - {selectedCOC.cocNumber}
+                </h3>
+                <button
+                  onClick={() => setShowViewModal(false)}
+                  className="text-white hover:text-gray-200 transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
             </div>
+
+            <div className="p-6">
 
             <div className="space-y-6">
               {/* COC Details */}
@@ -740,10 +762,10 @@ const COC = () => {
               )}
 
               {/* Actions */}
-              <div className="flex justify-end space-x-3 pt-4 border-t">
+              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
                 <button
                   onClick={() => handleDownloadPDF(selectedCOC.id, selectedCOC.cocNumber)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+                  className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-colors flex items-center gap-2"
                 >
                   <Download size={16} />
                   Download PDF
@@ -754,7 +776,7 @@ const COC = () => {
                       handleApproveCOC(selectedCOC.id);
                       setShowViewModal(false);
                     }}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
+                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors flex items-center gap-2"
                   >
                     <Check size={16} />
                     Approve COC
@@ -762,15 +784,17 @@ const COC = () => {
                 )}
                 <button
                   onClick={() => setShowViewModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Close
                 </button>
               </div>
             </div>
+            </div>
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

@@ -10,12 +10,11 @@ import Inventory from './pages/Inventory';
 import Accounting from './pages/Accounting';
 import Materials from './pages/Materials';
 import Processes from './pages/Processes';
-import Audit from './pages/Audit';
+import Reports from './pages/Reports';
 import Messages from './pages/Messages';
 import Users from './pages/Users';
 import Parties from './pages/Parties';
 import EnhancedDashboard from './pages/EnhancedDashboard';
-import COC from './pages/COC';
 import BackupRestore from './pages/BackupRestore';
 import Analytics from './pages/Analytics';
 
@@ -74,11 +73,10 @@ function App() {
               <Route path="accounting/*" element={<Accounting />} />
               <Route path="materials/*" element={<Materials />} />
               <Route path="processes/*" element={<Processes />} />
-              <Route path="audit/*" element={<Audit />} />
+              <Route path="reports/*" element={<Reports />} />
               <Route path="messages/*" element={<Messages />} />
               <Route path="users/*" element={<Users />} />
               <Route path="parties/*" element={<Parties />} />
-              <Route path="coc/*" element={<COC />} />
               <Route path="backup/*" element={<BackupRestore />} />
               <Route path="analytics/*" element={<Analytics />} />
             </Route>

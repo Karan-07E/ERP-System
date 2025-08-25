@@ -7,11 +7,10 @@ import {
   Calculator, 
   Wrench, 
   Cog, 
-  FileCheck, 
+  FileText, 
   MessageSquare, 
   Users,
   Building2,
-  Shield,
   Database,
   TrendingUp
 } from 'lucide-react';
@@ -56,14 +55,9 @@ const Sidebar = ({ isOpen }) => {
       label: 'Processes'
     },
     {
-      path: '/coc',
-      icon: Shield,
-      label: 'COC'
-    },
-    {
-      path: '/audit',
-      icon: FileCheck,
-      label: 'Audit'
+      path: '/reports',
+      icon: FileText,
+      label: 'Reports'
     },
     {
       path: '/messages',
