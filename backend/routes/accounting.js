@@ -1,92 +1,116 @@
 const express = require('express');
-const { Customer, Vendor, Item, Invoice, Quotation, Payment } = require('../models/Accounting');
+const { Op } = require('sequelize');
+const { Invoice, Quotation, Payment, Party } = require('../models/Accounting');
+const { calculateInvoiceTax, validateGSTNumber, calculateHSNSummary } = require('../utils/gstCalculations');
 const { auth, checkPermission } = require('../middleware/auth');
-const { validate, customerSchemas, itemSchemas, invoiceSchemas } = require('../middleware/validation');
+const { validate, invoiceSchemas } = require('../middleware/validation');
 const router = express.Router();
 
-// CUSTOMERS ROUTES
-// Get all customers
-router.get('/customers', auth, checkPermission('accounting', 'read'), async (req, res) => {
+// PARTIES ROUTES (Unified Customer/Vendor Entity)
+// Get all parties
+router.get('/parties', auth, checkPermission('accounting', 'read'), async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, isActive } = req.query;
+    const { page = 1, limit = 10, search, type, isActive } = req.query;
     
-    let query = {};
+    let whereClause = {};
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { companyName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+      whereClause[Op.or] = [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { companyName: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } },
+        { gstNumber: { [Op.iLike]: `%${search}%` } }
       ];
     }
-    if (isActive !== undefined) query.isActive = isActive === 'true';
+    if (type) whereClause.type = type;
+    if (isActive !== undefined) whereClause.isActive = isActive === 'true';
 
-    const customers = await Customer.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Customer.countDocuments(query);
+    const { count, rows: parties } = await Party.findAndCountAll({
+      where: whereClause,
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: (parseInt(page) - 1) * parseInt(limit)
+    });
 
     res.json({
-      customers,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
+      parties,
+      totalPages: Math.ceil(count / limit),
+      currentPage: parseInt(page),
+      total: count
     });
   } catch (error) {
-    console.error('Get customers error:', error);
+    console.error('Get parties error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Create customer
-router.post('/customers', auth, checkPermission('accounting', 'create'), validate(customerSchemas.create), async (req, res) => {
+// Create party
+router.post('/parties', auth, checkPermission('accounting', 'create'), async (req, res) => {
   try {
-    const customer = new Customer(req.body);
-    await customer.save();
-    res.status(201).json({ message: 'Customer created successfully', customer });
+    // Validate GST number if provided
+    if (req.body.gstNumber && !validateGSTNumber(req.body.gstNumber)) {
+      return res.status(400).json({ message: 'Invalid GST number format' });
+    }
+
+    const party = await Party.create({
+      ...req.body,
+      createdBy: req.user.id
+    });
+    
+    res.status(201).json({ message: 'Party created successfully', party });
   } catch (error) {
-    console.error('Create customer error:', error);
-    if (error.code === 11000) {
-      res.status(400).json({ message: 'Customer with this email already exists' });
+    console.error('Create party error:', error);
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      res.status(400).json({ message: 'Party with this email or GST number already exists' });
     } else {
       res.status(500).json({ message: 'Server error' });
     }
   }
 });
 
-// Update customer
-router.put('/customers/:id', auth, checkPermission('accounting', 'update'), async (req, res) => {
+// Update party
+router.put('/parties/:id', auth, checkPermission('accounting', 'update'), async (req, res) => {
   try {
-    const customer = await Customer.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-    if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+    // Validate GST number if provided
+    if (req.body.gstNumber && !validateGSTNumber(req.body.gstNumber)) {
+      return res.status(400).json({ message: 'Invalid GST number format' });
     }
-    res.json({ message: 'Customer updated successfully', customer });
+
+    const [updatedRowsCount] = await Party.update(req.body, {
+      where: { id: req.params.id },
+      returning: true
+    });
+    
+    if (updatedRowsCount === 0) {
+      return res.status(404).json({ message: 'Party not found' });
+    }
+    
+    const updatedParty = await Party.findByPk(req.params.id);
+    res.json({ message: 'Party updated successfully', party: updatedParty });
   } catch (error) {
-    console.error('Update customer error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Update party error:', error);
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      res.status(400).json({ message: 'Party with this email or GST number already exists' });
+    } else {
+      res.status(500).json({ message: 'Server error' });
+    }
   }
 });
 
-// Delete customer
-router.delete('/customers/:id', auth, checkPermission('accounting', 'delete'), async (req, res) => {
+// Delete party (soft delete)
+router.delete('/parties/:id', auth, checkPermission('accounting', 'delete'), async (req, res) => {
   try {
-    const customer = await Customer.findByIdAndUpdate(
-      req.params.id,
+    const [updatedRowsCount] = await Party.update(
       { isActive: false },
-      { new: true }
+      { where: { id: req.params.id } }
     );
-    if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+    
+    if (updatedRowsCount === 0) {
+      return res.status(404).json({ message: 'Party not found' });
     }
-    res.json({ message: 'Customer deleted successfully' });
+    
+    res.json({ message: 'Party deleted successfully' });
   } catch (error) {
-    console.error('Delete customer error:', error);
+    console.error('Delete party error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -230,31 +254,35 @@ router.put('/items/:id', auth, checkPermission('accounting', 'update'), validate
 // Get all invoices
 router.get('/invoices', auth, checkPermission('accounting', 'read'), async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, type, status, customer } = req.query;
+    const { page = 1, limit = 10, search, type, status, partyId } = req.query;
     
-    let query = {};
+    let whereClause = {};
     if (search) {
-      query.invoiceNumber = { $regex: search, $options: 'i' };
+      whereClause.invoiceNumber = { [Op.iLike]: `%${search}%` };
     }
-    if (type) query.type = type;
-    if (status) query.status = status;
-    if (customer) query.customer = customer;
+    if (type) whereClause.type = type;
+    if (status) whereClause.status = status;
+    if (partyId) whereClause.partyId = partyId;
 
-    const invoices = await Invoice.find(query)
-      .populate('customer', 'name companyName')
-      .populate('items.item', 'name itemCode')
-      .populate('createdBy', 'firstName lastName')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Invoice.countDocuments(query);
+    const { count, rows: invoices } = await Invoice.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: Party,
+          as: 'party',
+          attributes: ['id', 'name', 'companyName', 'gstNumber', 'stateCode']
+        }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: (parseInt(page) - 1) * parseInt(limit)
+    });
 
     res.json({
       invoices,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
+      totalPages: Math.ceil(count / limit),
+      currentPage: parseInt(page),
+      total: count
     });
   } catch (error) {
     console.error('Get invoices error:', error);
@@ -262,63 +290,75 @@ router.get('/invoices', auth, checkPermission('accounting', 'read'), async (req,
   }
 });
 
-// Create invoice
-router.post('/invoices', auth, checkPermission('accounting', 'create'), validate(invoiceSchemas.create), async (req, res) => {
+// Create invoice with GST calculations
+router.post('/invoices', auth, checkPermission('accounting', 'create'), async (req, res) => {
   try {
+    const { partyId, items, placeOfSupply, additionalDiscount = 0, ...otherData } = req.body;
+
+    // Get party details for GST calculation
+    const party = await Party.findByPk(partyId);
+    if (!party) {
+      return res.status(404).json({ message: 'Party not found' });
+    }
+
     // Generate invoice number
-    const lastInvoice = await Invoice.findOne().sort({ createdAt: -1 });
-    const invoiceNumber = `INV-${Date.now()}`;
+    const invoiceCount = await Invoice.count();
+    const invoiceNumber = `INV-${String(invoiceCount + 1).padStart(6, '0')}`;
 
-    // Calculate totals
-    let subtotal = 0;
-    let totalGst = 0;
-
-    const items = await Promise.all(
-      req.body.items.map(async (itemData) => {
-        const item = await Item.findById(itemData.item);
-        if (!item) {
-          throw new Error(`Item not found: ${itemData.item}`);
-        }
-
-        const amount = (itemData.quantity * itemData.unitPrice) - (itemData.discount || 0);
-        const gstAmount = (amount * (itemData.gstRate || item.gstRate)) / 100;
-
-        subtotal += amount;
-        totalGst += gstAmount;
-
-        return {
-          ...itemData,
-          amount,
-          gstRate: itemData.gstRate || item.gstRate
-        };
-      })
+    // Calculate GST split and tax breakdown
+    const taxCalculation = calculateInvoiceTax(
+      items,
+      additionalDiscount,
+      placeOfSupply,
+      party.stateCode
     );
 
-    const invoice = new Invoice({
-      ...req.body,
+    const invoice = await Invoice.create({
+      ...otherData,
       invoiceNumber,
-      items,
-      subtotal,
-      totalGst,
-      grandTotal: subtotal + totalGst,
-      createdBy: req.user._id
+      partyId,
+      placeOfSupply,
+      items: taxCalculation.itemCalculations,
+      beforeTaxAmount: taxCalculation.beforeTaxAmount,
+      taxableAmount: taxCalculation.taxableAmount,
+      totalDiscount: taxCalculation.totalDiscount,
+      cgstAmount: taxCalculation.cgstAmount,
+      sgstAmount: taxCalculation.sgstAmount,
+      igstAmount: taxCalculation.igstAmount,
+      totalGstAmount: taxCalculation.totalGstAmount,
+      afterTaxAmount: taxCalculation.afterTaxAmount,
+      grandTotal: taxCalculation.grandTotal,
+      createdBy: req.user.id
     });
 
-    await invoice.save();
-    await invoice.populate('customer', 'name companyName');
-    await invoice.populate('items.item', 'name itemCode');
+    // Fetch the created invoice with party details
+    const createdInvoice = await Invoice.findByPk(invoice.id, {
+      include: [
+        {
+          model: Party,
+          as: 'party',
+          attributes: ['id', 'name', 'companyName', 'gstNumber', 'stateCode']
+        }
+      ]
+    });
 
-    res.status(201).json({ message: 'Invoice created successfully', invoice });
+    res.status(201).json({ 
+      message: 'Invoice created successfully', 
+      invoice: createdInvoice 
+    });
   } catch (error) {
     console.error('Create invoice error:', error);
-    res.status(500).json({ message: error.message || 'Server error' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Update invoice
+// Update invoice with GST recalculation
 router.put('/invoices/:id', auth, checkPermission('accounting', 'update'), async (req, res) => {
   try {
-    const invoice = await Invoice.findById(req.params.id);
+    const invoice = await Invoice.findByPk(req.params.id, {
+      include: [{ model: Party, as: 'party' }]
+    });
+    
     if (!invoice) {
       return res.status(404).json({ message: 'Invoice not found' });
     }
@@ -328,49 +368,64 @@ router.put('/invoices/:id', auth, checkPermission('accounting', 'update'), async
       return res.status(400).json({ message: 'Cannot update paid invoice' });
     }
 
-    // Recalculate if items are updated
-    if (req.body.items) {
-      let subtotal = 0;
-      let totalGst = 0;
+    const { partyId, items, placeOfSupply, additionalDiscount = 0, ...otherData } = req.body;
 
-      const items = await Promise.all(
-        req.body.items.map(async (itemData) => {
-          const item = await Item.findById(itemData.item);
-          if (!item) {
-            throw new Error(`Item not found: ${itemData.item}`);
-          }
+    // If items are being updated, recalculate GST
+    if (items) {
+      let party = invoice.party;
+      
+      // If party is being changed, fetch new party
+      if (partyId && partyId !== invoice.partyId) {
+        party = await Party.findByPk(partyId);
+        if (!party) {
+          return res.status(404).json({ message: 'Party not found' });
+        }
+      }
 
-          const amount = (itemData.quantity * itemData.unitPrice) - (itemData.discount || 0);
-          const gstAmount = (amount * (itemData.gstRate || item.gstRate)) / 100;
-
-          subtotal += amount;
-          totalGst += gstAmount;
-
-          return {
-            ...itemData,
-            amount,
-            gstRate: itemData.gstRate || item.gstRate
-          };
-        })
+      // Recalculate taxes
+      const taxCalculation = calculateInvoiceTax(
+        items,
+        additionalDiscount,
+        placeOfSupply || invoice.placeOfSupply,
+        party.stateCode
       );
 
-      req.body.items = items;
-      req.body.subtotal = subtotal;
-      req.body.totalGst = totalGst;
-      req.body.grandTotal = subtotal + totalGst;
+      // Update with new calculations
+      await invoice.update({
+        ...otherData,
+        partyId: partyId || invoice.partyId,
+        placeOfSupply: placeOfSupply || invoice.placeOfSupply,
+        items: taxCalculation.itemCalculations,
+        beforeTaxAmount: taxCalculation.beforeTaxAmount,
+        taxableAmount: taxCalculation.taxableAmount,
+        totalDiscount: taxCalculation.totalDiscount,
+        cgstAmount: taxCalculation.cgstAmount,
+        sgstAmount: taxCalculation.sgstAmount,
+        igstAmount: taxCalculation.igstAmount,
+        totalGstAmount: taxCalculation.totalGstAmount,
+        afterTaxAmount: taxCalculation.afterTaxAmount,
+        grandTotal: taxCalculation.grandTotal
+      });
+    } else {
+      // Simple update without recalculation
+      await invoice.update(otherData);
     }
 
-    const updatedInvoice = await Invoice.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    ).populate('customer', 'name companyName')
-     .populate('items.item', 'name itemCode');
+    // Fetch updated invoice
+    const updatedInvoice = await Invoice.findByPk(req.params.id, {
+      include: [
+        {
+          model: Party,
+          as: 'party',
+          attributes: ['id', 'name', 'companyName', 'gstNumber', 'stateCode']
+        }
+      ]
+    });
 
     res.json({ message: 'Invoice updated successfully', invoice: updatedInvoice });
   } catch (error) {
     console.error('Update invoice error:', error);
-    res.status(500).json({ message: error.message || 'Server error' });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -378,7 +433,7 @@ router.put('/invoices/:id', auth, checkPermission('accounting', 'update'), async
 // Get all quotations
 router.get('/quotations', auth, checkPermission('accounting', 'read'), async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, status, customer } = req.query;
+    const { page = 1, limit = 10, search, status, partyId } = req.query;
     
     let query = {};
     if (search) {
@@ -591,6 +646,243 @@ router.get('/dashboard', auth, checkPermission('accounting', 'read'), async (req
     });
   } catch (error) {
     console.error('Get accounting dashboard error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GST REPORTS ROUTES
+// HSN Summary Report
+router.get('/reports/hsn-summary', auth, checkPermission('accounting', 'read'), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: 'Start date and end date are required' });
+    }
+
+    const whereClause = {
+      invoiceDate: {
+        [Op.between]: [new Date(startDate), new Date(endDate)]
+      },
+      status: { [Op.in]: ['sent', 'paid', 'partial'] }
+    };
+
+    const invoices = await Invoice.findAll({
+      where: whereClause,
+      attributes: ['items', 'cgstAmount', 'sgstAmount', 'igstAmount']
+    });
+
+    const hsnSummary = calculateHSNSummary(invoices);
+
+    res.json({
+      period: { startDate, endDate },
+      hsnSummary,
+      totalRecords: hsnSummary.length
+    });
+  } catch (error) {
+    console.error('HSN Summary error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GSTR-1 Report (Sales)
+router.get('/reports/gstr1', auth, checkPermission('accounting', 'read'), async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Month and year are required' });
+    }
+
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+
+    const salesInvoices = await Invoice.findAll({
+      where: {
+        type: 'sales',
+        invoiceDate: {
+          [Op.between]: [startDate, endDate]
+        },
+        status: { [Op.in]: ['sent', 'paid', 'partial'] }
+      },
+      include: [
+        {
+          model: Party,
+          as: 'party',
+          attributes: ['id', 'name', 'gstNumber', 'stateCode', 'type']
+        }
+      ],
+      order: [['invoiceDate', 'ASC']]
+    });
+
+    // Group by party for B2B transactions
+    const b2bTransactions = {};
+    const b2cTransactions = [];
+    let totalTaxableValue = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalIgst = 0;
+
+    salesInvoices.forEach(invoice => {
+      const partyGst = invoice.party.gstNumber;
+      
+      if (partyGst && invoice.afterTaxAmount >= 250000) { // B2B transactions
+        if (!b2bTransactions[partyGst]) {
+          b2bTransactions[partyGst] = {
+            gstNumber: partyGst,
+            partyName: invoice.party.name,
+            stateCode: invoice.party.stateCode,
+            invoices: [],
+            totalTaxableValue: 0,
+            totalTax: 0
+          };
+        }
+        
+        b2bTransactions[partyGst].invoices.push({
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate,
+          taxableValue: invoice.taxableAmount,
+          cgstAmount: invoice.cgstAmount,
+          sgstAmount: invoice.sgstAmount,
+          igstAmount: invoice.igstAmount,
+          totalTax: invoice.totalGstAmount
+        });
+        
+        b2bTransactions[partyGst].totalTaxableValue += invoice.taxableAmount;
+        b2bTransactions[partyGst].totalTax += invoice.totalGstAmount;
+      } else { // B2C transactions
+        b2cTransactions.push({
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate,
+          taxableValue: invoice.taxableAmount,
+          cgstAmount: invoice.cgstAmount,
+          sgstAmount: invoice.sgstAmount,
+          igstAmount: invoice.igstAmount,
+          totalTax: invoice.totalGstAmount,
+          placeOfSupply: invoice.placeOfSupply
+        });
+      }
+
+      totalTaxableValue += invoice.taxableAmount;
+      totalCgst += invoice.cgstAmount;
+      totalSgst += invoice.sgstAmount;
+      totalIgst += invoice.igstAmount;
+    });
+
+    res.json({
+      period: { month, year },
+      summary: {
+        totalTaxableValue: parseFloat(totalTaxableValue.toFixed(2)),
+        totalCgst: parseFloat(totalCgst.toFixed(2)),
+        totalSgst: parseFloat(totalSgst.toFixed(2)),
+        totalIgst: parseFloat(totalIgst.toFixed(2)),
+        totalTax: parseFloat((totalCgst + totalSgst + totalIgst).toFixed(2))
+      },
+      b2bTransactions: Object.values(b2bTransactions),
+      b2cTransactions,
+      hsnSummary: calculateHSNSummary(salesInvoices)
+    });
+  } catch (error) {
+    console.error('GSTR-1 error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Sales Summary Report
+router.get('/reports/sales-summary', auth, checkPermission('accounting', 'read'), async (req, res) => {
+  try {
+    const { startDate, endDate, groupBy = 'month' } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: 'Start date and end date are required' });
+    }
+
+    const whereClause = {
+      type: 'sales',
+      invoiceDate: {
+        [Op.between]: [new Date(startDate), new Date(endDate)]
+      },
+      status: { [Op.in]: ['sent', 'paid', 'partial'] }
+    };
+
+    const salesData = await Invoice.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: Party,
+          as: 'party',
+          attributes: ['id', 'name', 'stateCode']
+        }
+      ],
+      attributes: [
+        'invoiceDate',
+        'beforeTaxAmount',
+        'taxableAmount',
+        'cgstAmount',
+        'sgstAmount',
+        'igstAmount',
+        'totalGstAmount',
+        'afterTaxAmount',
+        'placeOfSupply'
+      ],
+      order: [['invoiceDate', 'ASC']]
+    });
+
+    // Group sales data
+    const groupedData = {};
+    salesData.forEach(invoice => {
+      let key;
+      const date = new Date(invoice.invoiceDate);
+      
+      if (groupBy === 'month') {
+        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      } else if (groupBy === 'quarter') {
+        const quarter = Math.floor(date.getMonth() / 3) + 1;
+        key = `${date.getFullYear()}-Q${quarter}`;
+      } else {
+        key = date.toISOString().split('T')[0];
+      }
+
+      if (!groupedData[key]) {
+        groupedData[key] = {
+          period: key,
+          totalSales: 0,
+          taxableAmount: 0,
+          totalTax: 0,
+          cgstAmount: 0,
+          sgstAmount: 0,
+          igstAmount: 0,
+          invoiceCount: 0
+        };
+      }
+
+      groupedData[key].totalSales += invoice.afterTaxAmount;
+      groupedData[key].taxableAmount += invoice.taxableAmount;
+      groupedData[key].totalTax += invoice.totalGstAmount;
+      groupedData[key].cgstAmount += invoice.cgstAmount;
+      groupedData[key].sgstAmount += invoice.sgstAmount;
+      groupedData[key].igstAmount += invoice.igstAmount;
+      groupedData[key].invoiceCount += 1;
+    });
+
+    // Round values
+    Object.values(groupedData).forEach(item => {
+      item.totalSales = parseFloat(item.totalSales.toFixed(2));
+      item.taxableAmount = parseFloat(item.taxableAmount.toFixed(2));
+      item.totalTax = parseFloat(item.totalTax.toFixed(2));
+      item.cgstAmount = parseFloat(item.cgstAmount.toFixed(2));
+      item.sgstAmount = parseFloat(item.sgstAmount.toFixed(2));
+      item.igstAmount = parseFloat(item.igstAmount.toFixed(2));
+    });
+
+    res.json({
+      period: { startDate, endDate },
+      groupBy,
+      data: Object.values(groupedData),
+      totalRecords: Object.keys(groupedData).length
+    });
+  } catch (error) {
+    console.error('Sales summary error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

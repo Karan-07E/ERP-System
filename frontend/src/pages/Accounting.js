@@ -19,11 +19,13 @@ import {
   Phone,
   MapPin,
   Calendar,
-  Download
+  Download,
+  TrendingUp,
+  BarChart3
 } from 'lucide-react';
 
 const Accounting = () => {
-  const [activeTab, setActiveTab] = useState('customers');
+  const [activeTab, setActiveTab] = useState('parties');
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
@@ -33,12 +35,11 @@ const Accounting = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   // Data states
-  const [customers, setCustomers] = useState([]);
-  const [vendors, setVendors] = useState([]);
-  const [items, setItems] = useState([]);
+  const [parties, setParties] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [quotations, setQuotations] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [reports, setReports] = useState({});
 
   useEffect(() => {
     fetchData();
@@ -48,186 +49,49 @@ const Accounting = () => {
     try {
       setLoading(true);
       
-      // Generate mock data based on active tab
-      if (activeTab === 'customers') {
-        const mockCustomers = [
-          {
-            _id: 'c1',
-            name: 'Acme Corporation',
-            companyName: 'Acme Corp',
-            email: 'contact@acme.com',
-            phone: '+91 98765 43210',
-            address: { street: '123 Business Street', city: 'Mumbai', state: 'Maharashtra', zipCode: '400001' },
-            gstNumber: '27AAACC1234A1Z5',
-            creditLimit: 500000,
-            paymentTerms: 'Net 30',
-            isActive: true,
-            createdAt: new Date('2025-01-15')
-          },
-          {
-            _id: 'c2',
-            name: 'TechSolutions Pvt Ltd',
-            companyName: 'TechSolutions',
-            email: 'info@techsolutions.com',
-            phone: '+91 98765 43211',
-            address: { street: '456 Tech Park', city: 'Bangalore', state: 'Karnataka', zipCode: '560001' },
-            gstNumber: '29BBBCC5678B1Z5',
-            creditLimit: 750000,
-            paymentTerms: 'Net 45',
-            isActive: true,
-            createdAt: new Date('2025-02-01')
+      switch (activeTab) {
+        case 'parties':
+          const partiesResponse = await axios.get('/api/accounting/parties');
+          setParties(partiesResponse.data.parties || []);
+          break;
+        case 'invoices':
+          const invoicesResponse = await axios.get('/api/accounting/invoices');
+          setInvoices(invoicesResponse.data.invoices || []);
+          break;
+        case 'quotations':
+          const quotationsResponse = await axios.get('/api/accounting/quotations');
+          setQuotations(quotationsResponse.data.quotations || []);
+          break;
+        case 'payments':
+          const paymentsResponse = await axios.get('/api/accounting/payments');
+          setPayments(paymentsResponse.data.payments || []);
+          break;
+        case 'reports':
+          // Load basic report data
+          const currentDate = new Date();
+          const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+          const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+          
+          try {
+            const [salesSummary, hsnSummary] = await Promise.all([
+              axios.get(`/api/accounting/reports/sales-summary?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`),
+              axios.get(`/api/accounting/reports/hsn-summary?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`)
+            ]);
+            
+            setReports({
+              salesSummary: salesSummary.data,
+              hsnSummary: hsnSummary.data
+            });
+          } catch (reportError) {
+            console.log('Report data not available:', reportError);
+            setReports({});
           }
-        ];
-        setCustomers(mockCustomers);
-      } else if (activeTab === 'vendors') {
-        const mockVendors = [
-          {
-            _id: 'v1',
-            name: 'Steel Industries Ltd',
-            companyName: 'Steel Industries',
-            email: 'sales@steelindustries.com',
-            phone: '+91 98765 43212',
-            address: { street: '789 Industrial Area', city: 'Chennai', state: 'Tamil Nadu', zipCode: '600001' },
-            gstNumber: '33DDDCC9012D1Z5',
-            paymentTerms: 'Net 15',
-            isActive: true,
-            createdAt: new Date('2025-01-20')
-          },
-          {
-            _id: 'v2',
-            name: 'Raw Materials Supply Co',
-            companyName: 'RMS Co',
-            email: 'orders@rmsco.com',
-            phone: '+91 98765 43213',
-            address: { street: '321 Supply Chain Rd', city: 'Pune', state: 'Maharashtra', zipCode: '411001' },
-            gstNumber: '27EEECC3456E1Z5',
-            paymentTerms: 'Net 30',
-            isActive: true,
-            createdAt: new Date('2025-02-05')
-          }
-        ];
-        setVendors(mockVendors);
-      } else if (activeTab === 'items') {
-        const mockItems = [
-          {
-            _id: 'i1',
-            itemCode: 'STEEL-ROD-12',
-            name: 'Steel Rod 12mm',
-            description: 'High quality steel rod 12mm diameter',
-            category: 'raw_material',
-            unit: 'pieces',
-            purchasePrice: 450,
-            salePrice: 550,
-            hsnCode: '7213',
-            gstRate: 18,
-            reorderLevel: 50,
-            maxStock: 1000,
-            isActive: true
-          },
-          {
-            _id: 'i2',
-            itemCode: 'CEMENT-BAG-50',
-            name: 'Cement Bag 50kg',
-            description: 'Portland cement 50kg bag',
-            category: 'raw_material',
-            unit: 'bags',
-            purchasePrice: 320,
-            salePrice: 380,
-            hsnCode: '2523',
-            gstRate: 28,
-            reorderLevel: 100,
-            maxStock: 2000,
-            isActive: true
-          }
-        ];
-        setItems(mockItems);
-      } else if (activeTab === 'invoices') {
-        const mockInvoices = [
-          {
-            _id: 'inv1',
-            invoiceNumber: 'INV-2025-001',
-            type: 'normal',
-            customer: { name: 'Acme Corporation', companyName: 'Acme Corp' },
-            invoiceDate: new Date('2025-07-01'),
-            dueDate: new Date('2025-07-31'),
-            subtotal: 50000,
-            totalGst: 9000,
-            grandTotal: 59000,
-            status: 'sent',
-            paymentStatus: 'unpaid',
-            paidAmount: 0
-          },
-          {
-            _id: 'inv2',
-            invoiceNumber: 'INV-2025-002',
-            type: 'normal',
-            customer: { name: 'TechSolutions Pvt Ltd', companyName: 'TechSolutions' },
-            invoiceDate: new Date('2025-07-15'),
-            dueDate: new Date('2025-08-15'),
-            subtotal: 75000,
-            totalGst: 13500,
-            grandTotal: 88500,
-            status: 'sent',
-            paymentStatus: 'partial',
-            paidAmount: 40000
-          }
-        ];
-        setInvoices(mockInvoices);
-      } else if (activeTab === 'quotations') {
-        const mockQuotations = [
-          {
-            _id: 'q1',
-            quotationNumber: 'QUO-2025-001',
-            customer: { name: 'Acme Corporation', companyName: 'Acme Corp' },
-            quotationDate: new Date('2025-07-20'),
-            validUntil: new Date('2025-08-20'),
-            subtotal: 120000,
-            totalGst: 21600,
-            grandTotal: 141600,
-            status: 'sent'
-          },
-          {
-            _id: 'q2',
-            quotationNumber: 'QUO-2025-002',
-            customer: { name: 'TechSolutions Pvt Ltd', companyName: 'TechSolutions' },
-            quotationDate: new Date('2025-07-25'),
-            validUntil: new Date('2025-08-25'),
-            subtotal: 95000,
-            totalGst: 17100,
-            grandTotal: 112100,
-            status: 'draft'
-          }
-        ];
-        setQuotations(mockQuotations);
-      } else if (activeTab === 'payments') {
-        const mockPayments = [
-          {
-            _id: 'p1',
-            paymentNumber: 'PAY-2025-001',
-            type: 'payment_in',
-            amount: 40000,
-            paymentDate: new Date('2025-07-30'),
-            paymentMethod: 'bank_transfer',
-            reference: 'NEFT123456',
-            description: 'Payment for Invoice INV-2025-002',
-            customer: { name: 'TechSolutions Pvt Ltd' }
-          },
-          {
-            _id: 'p2',
-            paymentNumber: 'PAY-2025-002',
-            type: 'payment_out',
-            amount: 25000,
-            paymentDate: new Date('2025-08-01'),
-            paymentMethod: 'cheque',
-            reference: 'CHQ789012',
-            description: 'Payment to vendor for raw materials',
-            vendor: { name: 'Steel Industries Ltd' }
-          }
-        ];
-        setPayments(mockPayments);
+          break;
+        default:
+          break;
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Fetch data error:', error);
     } finally {
       setLoading(false);
     }
@@ -508,25 +372,11 @@ const Accounting = () => {
       {/* Navigation Tabs */}
       <div className="tabs">
         <button 
-          className={`tab ${activeTab === 'customers' ? 'active' : ''}`}
-          onClick={() => setActiveTab('customers')}
+          className={`tab ${activeTab === 'parties' ? 'active' : ''}`}
+          onClick={() => setActiveTab('parties')}
         >
           <Users size={18} />
-          Customers
-        </button>
-        <button 
-          className={`tab ${activeTab === 'vendors' ? 'active' : ''}`}
-          onClick={() => setActiveTab('vendors')}
-        >
-          <UserCheck size={18} />
-          Vendors
-        </button>
-        <button 
-          className={`tab ${activeTab === 'items' ? 'active' : ''}`}
-          onClick={() => setActiveTab('items')}
-        >
-          <Package size={18} />
-          Items
+          Parties
         </button>
         <button 
           className={`tab ${activeTab === 'invoices' ? 'active' : ''}`}
@@ -539,7 +389,7 @@ const Accounting = () => {
           className={`tab ${activeTab === 'quotations' ? 'active' : ''}`}
           onClick={() => setActiveTab('quotations')}
         >
-          <FileText size={18} />
+          <Calculator size={18} />
           Quotations
         </button>
         <button 
@@ -548,6 +398,13 @@ const Accounting = () => {
         >
           <CreditCard size={18} />
           Payments
+        </button>
+        <button 
+          className={`tab ${activeTab === 'reports' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reports')}
+        >
+          <BarChart3 size={18} />
+          GST Reports
         </button>
       </div>
 

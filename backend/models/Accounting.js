@@ -1,109 +1,8 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
-// Customer Model
-const Customer = sequelize.define('Customer', {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true
-  },
-  name: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  companyName: {
-    type: DataTypes.STRING
-  },
-  email: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    validate: {
-      isEmail: true
-    }
-  },
-  phone: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  address: {
-    type: DataTypes.JSONB,
-    defaultValue: {}
-  },
-  gstNumber: {
-    type: DataTypes.STRING
-  },
-  panNumber: {
-    type: DataTypes.STRING
-  },
-  creditLimit: {
-    type: DataTypes.DECIMAL(15, 2),
-    defaultValue: 0
-  },
-  paymentTerms: {
-    type: DataTypes.STRING,
-    defaultValue: 'Net 30'
-  },
-  isActive: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: true
-  }
-}, {
-  tableName: 'customers',
-  timestamps: true
-});
-
-// Vendor Model
-const Vendor = sequelize.define('Vendor', {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true
-  },
-  name: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  companyName: {
-    type: DataTypes.STRING
-  },
-  email: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    validate: {
-      isEmail: true
-    }
-  },
-  phone: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  address: {
-    type: DataTypes.JSONB,
-    defaultValue: {}
-  },
-  gstNumber: {
-    type: DataTypes.STRING
-  },
-  panNumber: {
-    type: DataTypes.STRING
-  },
-  paymentTerms: {
-    type: DataTypes.STRING,
-    defaultValue: 'Net 30'
-  },
-  bankDetails: {
-    type: DataTypes.JSONB,
-    defaultValue: {}
-  },
-  isActive: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: true
-  }
-}, {
-  tableName: 'vendors',
-  timestamps: true
-});
+// Import Party model (unified customer/vendor entity)
+const Party = require('./Party');
 
 // Item Model
 const Item = sequelize.define('Item', {
@@ -174,7 +73,7 @@ const Item = sequelize.define('Item', {
   timestamps: true
 });
 
-// Invoice Model
+// Invoice Model with GST split support
 const Invoice = sequelize.define('Invoice', {
   id: {
     type: DataTypes.UUID,
@@ -187,16 +86,21 @@ const Invoice = sequelize.define('Invoice', {
     unique: true
   },
   type: {
-    type: DataTypes.ENUM('proforma', 'normal', 'credit_note'),
+    type: DataTypes.ENUM('proforma', 'normal', 'credit_note', 'debit_note'),
     defaultValue: 'normal'
   },
-  customer: {
+  partyId: {
     type: DataTypes.UUID,
     allowNull: false,
     references: {
-      model: 'customers',
+      model: 'parties',
       key: 'id'
     }
+  },
+  partyType: {
+    type: DataTypes.ENUM('customer', 'vendor'),
+    allowNull: false,
+    defaultValue: 'customer'
   },
   invoiceDate: {
     type: DataTypes.DATE,
@@ -206,21 +110,55 @@ const Invoice = sequelize.define('Invoice', {
     type: DataTypes.DATE,
     allowNull: false
   },
+  placeOfSupply: {
+    type: DataTypes.STRING(2), // State code
+    allowNull: false
+  },
   items: {
     type: DataTypes.JSONB,
     defaultValue: []
   },
-  subtotal: {
+  // Tax breakdown
+  beforeTaxAmount: {
     type: DataTypes.DECIMAL(15, 2),
-    allowNull: false
+    allowNull: false,
+    defaultValue: 0
+  },
+  taxableAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0
   },
   totalDiscount: {
     type: DataTypes.DECIMAL(15, 2),
     defaultValue: 0
   },
-  totalGst: {
+  // GST Split
+  cgstAmount: {
     type: DataTypes.DECIMAL(15, 2),
-    allowNull: false
+    defaultValue: 0
+  },
+  sgstAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  igstAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  totalGstAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0
+  },
+  afterTaxAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0
+  },
+  roundingAdjustment: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
   },
   grandTotal: {
     type: DataTypes.DECIMAL(15, 2),
@@ -238,6 +176,17 @@ const Invoice = sequelize.define('Invoice', {
     type: DataTypes.DECIMAL(15, 2),
     defaultValue: 0
   },
+  // GST Compliance fields
+  irnNumber: {
+    type: DataTypes.STRING(64) // IRN for e-invoicing
+  },
+  eWayBillNumber: {
+    type: DataTypes.STRING(20)
+  },
+  reverseCharge: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
   notes: {
     type: DataTypes.TEXT
   },
@@ -254,10 +203,17 @@ const Invoice = sequelize.define('Invoice', {
   }
 }, {
   tableName: 'invoices',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    { fields: ['invoiceNumber'] },
+    { fields: ['partyId'] },
+    { fields: ['invoiceDate'] },
+    { fields: ['status'] },
+    { fields: ['paymentStatus'] }
+  ]
 });
 
-// Quotation Model
+// Quotation Model with GST split support
 const Quotation = sequelize.define('Quotation', {
   id: {
     type: DataTypes.UUID,
@@ -269,11 +225,11 @@ const Quotation = sequelize.define('Quotation', {
     allowNull: false,
     unique: true
   },
-  customer: {
+  partyId: {
     type: DataTypes.UUID,
     allowNull: false,
     references: {
-      model: 'customers',
+      model: 'parties',
       key: 'id'
     }
   },
@@ -285,21 +241,51 @@ const Quotation = sequelize.define('Quotation', {
     type: DataTypes.DATE,
     allowNull: false
   },
+  placeOfSupply: {
+    type: DataTypes.STRING(2), // State code
+    allowNull: false
+  },
   items: {
     type: DataTypes.JSONB,
     defaultValue: []
   },
-  subtotal: {
+  // Tax breakdown
+  beforeTaxAmount: {
     type: DataTypes.DECIMAL(15, 2),
-    allowNull: false
+    allowNull: false,
+    defaultValue: 0
+  },
+  taxableAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0
   },
   totalDiscount: {
     type: DataTypes.DECIMAL(15, 2),
     defaultValue: 0
   },
-  totalGst: {
+  // GST Split
+  cgstAmount: {
     type: DataTypes.DECIMAL(15, 2),
-    allowNull: false
+    defaultValue: 0
+  },
+  sgstAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  igstAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  totalGstAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0
+  },
+  afterTaxAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0
   },
   grandTotal: {
     type: DataTypes.DECIMAL(15, 2),
@@ -325,10 +311,16 @@ const Quotation = sequelize.define('Quotation', {
   }
 }, {
   tableName: 'quotations',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    { fields: ['quotationNumber'] },
+    { fields: ['partyId'] },
+    { fields: ['quotationDate'] },
+    { fields: ['status'] }
+  ]
 });
 
-// Payment Model
+// Payment Model with GST support
 const Payment = sequelize.define('Payment', {
   id: {
     type: DataTypes.UUID,
@@ -341,51 +333,56 @@ const Payment = sequelize.define('Payment', {
     unique: true
   },
   type: {
-    type: DataTypes.ENUM('payment_in', 'payment_out'),
+    type: DataTypes.ENUM('payment', 'receipt'),
     allowNull: false
   },
-  amount: {
-    type: DataTypes.DECIMAL(15, 2),
+  partyId: {
+    type: DataTypes.UUID,
     allowNull: false,
-    validate: {
-      min: 0
+    references: {
+      model: 'parties',
+      key: 'id'
     }
   },
   paymentDate: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
   },
-  paymentMethod: {
-    type: DataTypes.ENUM('cash', 'cheque', 'bank_transfer', 'card', 'upi'),
+  amount: {
+    type: DataTypes.DECIMAL(15, 2),
     allowNull: false
   },
-  reference: {
+  paymentMode: {
+    type: DataTypes.ENUM('cash', 'cheque', 'bank_transfer', 'upi', 'card'),
+    allowNull: false
+  },
+  referenceNumber: {
     type: DataTypes.STRING
   },
-  description: {
-    type: DataTypes.STRING,
-    allowNull: false
+  bankDetails: {
+    type: DataTypes.JSONB
   },
-  customer: {
-    type: DataTypes.UUID,
-    references: {
-      model: 'customers',
-      key: 'id'
-    }
-  },
-  vendor: {
-    type: DataTypes.UUID,
-    references: {
-      model: 'vendors',
-      key: 'id'
-    }
-  },
-  invoice: {
+  invoiceId: {
     type: DataTypes.UUID,
     references: {
       model: 'invoices',
       key: 'id'
     }
+  },
+  tdsAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0
+  },
+  tdsPercentage: {
+    type: DataTypes.DECIMAL(5, 2),
+    defaultValue: 0
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'completed', 'cancelled'),
+    defaultValue: 'pending'
+  },
+  notes: {
+    type: DataTypes.TEXT
   },
   createdBy: {
     type: DataTypes.UUID,
@@ -397,14 +394,19 @@ const Payment = sequelize.define('Payment', {
   }
 }, {
   tableName: 'payments',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    { fields: ['paymentNumber'] },
+    { fields: ['partyId'] },
+    { fields: ['paymentDate'] },
+    { fields: ['type'] },
+    { fields: ['status'] }
+  ]
 });
 
 module.exports = {
-  Customer,
-  Vendor,
-  Item,
   Invoice,
   Quotation,
-  Payment
+  Payment,
+  Party
 };
