@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../api/config';
 import { 
   Calculator, 
@@ -9,18 +9,9 @@ import {
   Trash2, 
   X,
   Users,
-  UserCheck,
-  Package,
   FileText,
   CreditCard,
-  DollarSign,
-  Building,
-  Mail,
-  Phone,
-  MapPin,
-  Calendar,
   Download,
-  TrendingUp,
   BarChart3
 } from 'lucide-react';
 
@@ -43,9 +34,9 @@ const Accounting = () => {
 
   useEffect(() => {
     fetchData();
-  }, [activeTab]);
+  }, [activeTab, fetchData]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -95,7 +86,7 @@ const Accounting = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
 
   const handleCreate = () => {
     setModalType('create');
@@ -121,12 +112,14 @@ const Accounting = () => {
     if (window.confirm(`Are you sure you want to delete this ${activeTab.slice(0, -1)}?`)) {
       try {
         // Remove item from state (in real app, would call API)
-        if (activeTab === 'customers') {
-          setCustomers(prev => prev.filter(c => c._id !== item._id));
-        } else if (activeTab === 'vendors') {
-          setVendors(prev => prev.filter(v => v._id !== item._id));
-        } else if (activeTab === 'items') {
-          setItems(prev => prev.filter(i => i._id !== item._id));
+        if (activeTab === 'parties') {
+          setParties(prev => prev.filter(p => p.id !== item.id));
+        } else if (activeTab === 'invoices') {
+          setInvoices(prev => prev.filter(i => i.id !== item.id));
+        } else if (activeTab === 'quotations') {
+          setQuotations(prev => prev.filter(q => q.id !== item.id));
+        } else if (activeTab === 'payments') {
+          setPayments(prev => prev.filter(p => p.id !== item.id));
         }
         alert(`${activeTab.slice(0, -1)} deleted successfully!`);
       } catch (error) {
@@ -143,35 +136,41 @@ const Accounting = () => {
     try {
       if (modalType === 'create') {
         const newItem = {
-          _id: `${activeTab.slice(0, 1)}${Date.now()}`,
+          id: `${activeTab.slice(0, 1)}${Date.now()}`,
           ...formData,
           createdAt: new Date(),
           isActive: true
         };
 
         // Add specific fields based on tab
-        if (activeTab === 'customers') {
+        if (activeTab === 'parties') {
           newItem.creditLimit = formData.creditLimit || 100000;
           newItem.paymentTerms = formData.paymentTerms || 'Net 30';
-          setCustomers(prev => [newItem, ...prev]);
-        } else if (activeTab === 'vendors') {
-          newItem.paymentTerms = formData.paymentTerms || 'Net 30';
-          setVendors(prev => [newItem, ...prev]);
-        } else if (activeTab === 'items') {
-          newItem.itemCode = formData.itemCode || `ITEM-${Date.now()}`;
-          setItems(prev => [newItem, ...prev]);
+          newItem.type = formData.type || 'customer';
+          setParties(prev => [newItem, ...prev]);
+        } else if (activeTab === 'invoices') {
+          newItem.invoiceNumber = `INV-${Date.now()}`;
+          setInvoices(prev => [newItem, ...prev]);
+        } else if (activeTab === 'quotations') {
+          newItem.quotationNumber = `QUO-${Date.now()}`;
+          setQuotations(prev => [newItem, ...prev]);
+        } else if (activeTab === 'payments') {
+          newItem.paymentNumber = `PAY-${Date.now()}`;
+          setPayments(prev => [newItem, ...prev]);
         }
 
         alert(`${activeTab.slice(0, -1)} created successfully!`);
       } else if (modalType === 'edit') {
         const updatedItem = { ...selectedItem, ...formData };
 
-        if (activeTab === 'customers') {
-          setCustomers(prev => prev.map(c => c._id === selectedItem._id ? updatedItem : c));
-        } else if (activeTab === 'vendors') {
-          setVendors(prev => prev.map(v => v._id === selectedItem._id ? updatedItem : v));
-        } else if (activeTab === 'items') {
-          setItems(prev => prev.map(i => i._id === selectedItem._id ? updatedItem : i));
+        if (activeTab === 'parties') {
+          setParties(prev => prev.map(p => p.id === selectedItem.id ? updatedItem : p));
+        } else if (activeTab === 'invoices') {
+          setInvoices(prev => prev.map(i => i.id === selectedItem.id ? updatedItem : i));
+        } else if (activeTab === 'quotations') {
+          setQuotations(prev => prev.map(q => q.id === selectedItem.id ? updatedItem : q));
+        } else if (activeTab === 'payments') {
+          setPayments(prev => prev.map(p => p.id === selectedItem.id ? updatedItem : p));
         }
 
         alert(`${activeTab.slice(0, -1)} updated successfully!`);
@@ -209,7 +208,7 @@ const Accounting = () => {
 
   const getDefaultFormData = () => {
     switch (activeTab) {
-      case 'customers':
+      case 'parties':
         return {
           name: '',
           companyName: '',
@@ -217,18 +216,35 @@ const Accounting = () => {
           phone: '',
           address: { street: '', city: '', state: '', zipCode: '' },
           gstNumber: '',
+          stateCode: '',
+          type: 'customer',
           creditLimit: 100000,
           paymentTerms: 'Net 30'
         };
-      case 'vendors':
+      case 'invoices':
         return {
-          name: '',
-          companyName: '',
-          email: '',
-          phone: '',
-          address: { street: '', city: '', state: '', zipCode: '' },
-          gstNumber: '',
-          paymentTerms: 'Net 30'
+          partyId: '',
+          invoiceDate: new Date().toISOString().split('T')[0],
+          dueDate: '',
+          placeOfSupply: '',
+          items: [],
+          notes: ''
+        };
+      case 'quotations':
+        return {
+          partyId: '',
+          quotationDate: new Date().toISOString().split('T')[0],
+          validUntil: '',
+          items: [],
+          notes: ''
+        };
+      case 'payments':
+        return {
+          partyId: '',
+          amount: 0,
+          paymentDate: new Date().toISOString().split('T')[0],
+          paymentMode: 'cash',
+          notes: ''
         };
       case 'items':
         return {
@@ -244,19 +260,18 @@ const Accounting = () => {
           reorderLevel: 10,
           maxStock: 1000
         };
-      default:
+        default:
         return {};
     }
   };
 
   const getCurrentData = () => {
     switch (activeTab) {
-      case 'customers': return customers;
-      case 'vendors': return vendors;
-      case 'items': return items;
+      case 'parties': return parties;
       case 'invoices': return invoices;
       case 'quotations': return quotations;
       case 'payments': return payments;
+      case 'reports': return [];
       default: return [];
     }
   };
@@ -265,11 +280,9 @@ const Accounting = () => {
     if (!searchTerm) return true;
     
     const searchFields = {
-      customers: ['name', 'companyName', 'email'],
-      vendors: ['name', 'companyName', 'email'],
-      items: ['name', 'itemCode', 'description'],
-      invoices: ['invoiceNumber', 'customer.name'],
-      quotations: ['quotationNumber', 'customer.name'],
+      parties: ['name', 'companyName', 'email', 'gstNumber'],
+      invoices: ['invoiceNumber', 'party.name'],
+      quotations: ['quotationNumber', 'party.name'],
       payments: ['paymentNumber', 'description']
     };
 
@@ -312,34 +325,36 @@ const Accounting = () => {
     let rows = [];
 
     switch (activeTab) {
-      case 'customers':
-        headers = ['Name', 'Company', 'Email', 'Phone', 'GST Number', 'Credit Limit', 'Payment Terms'];
+      case 'parties':
+        headers = ['Name', 'Company', 'Email', 'Phone', 'GST Number', 'Type', 'Credit Limit', 'Payment Terms'];
         rows = data.map(item => [
           item.name, item.companyName, item.email, item.phone,
-          item.gstNumber || '', item.creditLimit, item.paymentTerms
-        ]);
-        break;
-      case 'vendors':
-        headers = ['Name', 'Company', 'Email', 'Phone', 'GST Number', 'Payment Terms'];
-        rows = data.map(item => [
-          item.name, item.companyName, item.email, item.phone,
-          item.gstNumber || '', item.paymentTerms
-        ]);
-        break;
-      case 'items':
-        headers = ['Item Code', 'Name', 'Category', 'Unit', 'Purchase Price', 'Sale Price', 'GST Rate'];
-        rows = data.map(item => [
-          item.itemCode, item.name, item.category, item.unit,
-          item.purchasePrice, item.salePrice, item.gstRate
+          item.gstNumber || '', item.type, item.creditLimit, item.paymentTerms
         ]);
         break;
       case 'invoices':
-        headers = ['Invoice Number', 'Customer', 'Amount', 'Status', 'Payment Status', 'Due Date'];
+        headers = ['Invoice Number', 'Party', 'Amount', 'Status', 'Payment Status', 'Due Date'];
         rows = data.map(item => [
-          item.invoiceNumber, item.customer?.name || '', item.grandTotal,
-          item.status, item.paymentStatus, item.dueDate?.toLocaleDateString()
+          item.invoiceNumber, item.party?.name || 'N/A', item.grandTotal,
+          item.status, item.paymentStatus, item.dueDate
         ]);
         break;
+      case 'quotations':
+        headers = ['Quotation Number', 'Party', 'Amount', 'Status', 'Valid Until'];
+        rows = data.map(item => [
+          item.quotationNumber, item.party?.name || 'N/A', item.grandTotal,
+          item.status, item.validUntil
+        ]);
+        break;
+      case 'payments':
+        headers = ['Payment Number', 'Party', 'Amount', 'Type', 'Payment Mode', 'Date'];
+        rows = data.map(item => [
+          item.paymentNumber, item.party?.name || 'N/A', item.amount,
+          item.type, item.paymentMode, item.paymentDate
+        ]);
+        break;
+      default:
+        return;
     }
 
     const csvContent = [headers, ...rows].map(row => 
@@ -427,7 +442,7 @@ const Accounting = () => {
             <Download size={18} />
             Export CSV
           </button>
-          {['customers', 'vendors', 'items'].includes(activeTab) && (
+          {!['reports'].includes(activeTab) && (
             <button className="btn btn-primary" onClick={handleCreate}>
               <Plus size={18} />
               Add {activeTab.slice(0, -1)}
@@ -443,7 +458,7 @@ const Accounting = () => {
             <Calculator size={48} />
             <h3>No {activeTab} found</h3>
             <p>Start by adding your first {activeTab.slice(0, -1)}</p>
-            {['customers', 'vendors', 'items'].includes(activeTab) && (
+            {!['reports'].includes(activeTab) && (
               <button className="btn btn-primary" onClick={handleCreate}>
                 Add {activeTab.slice(0, -1)}
               </button>

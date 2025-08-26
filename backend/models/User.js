@@ -93,6 +93,33 @@ const User = sequelize.define('User', {
   timestamps: true,
   hooks: {
     beforeCreate: async (user) => {
+      // Generate unique user ID if not provided
+      if (!user.userId) {
+        try {
+          // Count existing users and increment
+          const userCount = await User.count();
+          let nextNumber = userCount + 1;
+          
+          // Check if this number is already taken (in case of manual assignments)
+          let isUnique = false;
+          while (!isUnique) {
+            const testUserId = `USR${nextNumber.toString().padStart(4, '0')}`;
+            const existingUser = await User.findOne({ where: { userId: testUserId } });
+            if (!existingUser) {
+              user.userId = testUserId;
+              isUnique = true;
+            } else {
+              nextNumber++;
+            }
+          }
+        } catch (error) {
+          // Fallback to timestamp-based ID if there's an error
+          const timestamp = Date.now().toString().slice(-4);
+          user.userId = `USR${timestamp}`;
+        }
+      }
+      
+      // Hash password
       if (user.password) {
         const saltRounds = 10;
         user.password = await bcrypt.hash(user.password, saltRounds);

@@ -1,411 +1,299 @@
 const express = require('express');
-const { Message, Conversation, Notification, BroadcastMessage } = require('../models/Message');
-const { auth, checkPermission } = require('../middleware/auth');
-const { validate, messageSchemas } = require('../middleware/validation');
+const { InternalMessage } = require('../models');
+const { User } = require('../models');
+const { auth } = require('../middleware/auth');
 const router = express.Router();
 
-// MESSAGES ROUTES
-// Get all messages (inbox)
-router.get('/', auth, checkPermission('messages', 'read'), async (req, res) => {
+// Get all users for messaging (with user IDs)
+router.get('/users', auth, async (req, res) => {
   try {
-    const { page = 1, limit = 10, type = 'received', search, status } = req.query;
-    
-    let query = {};
-    if (type === 'received') {
-      query.receiver = req.user._id;
-      query['isDeleted.receiver'] = false;
-    } else if (type === 'sent') {
-      query.sender = req.user._id;
-      query['isDeleted.sender'] = false;
-    }
-
-    if (search) {
-      query.$or = [
-        { subject: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } }
-      ];
-    }
-    if (status) query.status = status;
-
-    const messages = await Message.find(query)
-      .populate('sender', 'firstName lastName username')
-      .populate('receiver', 'firstName lastName username')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Message.countDocuments(query);
-    const unreadCount = await Message.countDocuments({
-      receiver: req.user._id,
-      status: { $in: ['sent', 'delivered'] },
-      'isDeleted.receiver': false
+    const users = await User.findAll({
+      where: { isActive: true },
+      attributes: ['id', 'userId', 'firstName', 'lastName', 'username', 'email', 'department', 'designation'],
+      order: [['firstName', 'ASC'], ['lastName', 'ASC']]
     });
 
-    res.json({
-      messages,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total,
-      unreadCount
-    });
+    res.json({ users });
   } catch (error) {
-    console.error('Get messages error:', error);
+    console.error('Get users error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Get message by ID
-router.get('/:id', auth, checkPermission('messages', 'read'), async (req, res) => {
+// Get conversations for current user
+router.get('/conversations', auth, async (req, res) => {
   try {
-    const message = await Message.findById(req.params.id)
-      .populate('sender', 'firstName lastName username email')
-      .populate('receiver', 'firstName lastName username email')
-      .populate('parentMessage');
+    const { search } = req.query;
+    
+    // Get all conversations where user is either sender or receiver
+    let whereClause = {
+      [require('sequelize').Op.or]: [
+        { fromUserId: req.user.id },
+        { toUserId: req.user.id }
+      ]
+    };
 
-    if (!message) {
-      return res.status(404).json({ message: 'Message not found' });
-    }
+    const messages = await InternalMessage.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'fromUser',
+          attributes: ['id', 'userId', 'firstName', 'lastName', 'username', 'department', 'designation']
+        },
+        {
+          model: User,
+          as: 'toUser', 
+          attributes: ['id', 'userId', 'firstName', 'lastName', 'username', 'department', 'designation']
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
 
-    // Check if user has access to this message
-    if (message.sender._id.toString() !== req.user._id.toString() && 
-        message.receiver._id.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    // Mark as read if receiver is viewing
-    if (message.receiver._id.toString() === req.user._id.toString() && 
-        message.status !== 'read') {
-      message.status = 'read';
-      message.readAt = new Date();
-      await message.save();
-
-      // Emit real-time update
-      const io = req.app.get('io');
-      io.to(message.sender._id.toString()).emit('message_read', {
-        messageId: message._id,
-        readAt: message.readAt
+    // Group messages into conversations
+    const conversationsMap = new Map();
+    
+    messages.forEach(message => {
+      const otherUser = message.fromUserId === req.user.id ? message.toUser : message.fromUser;
+      const conversationKey = otherUser.id;
+      
+      if (!conversationsMap.has(conversationKey)) {
+        conversationsMap.set(conversationKey, {
+          id: conversationKey,
+          participant: otherUser,
+          lastMessage: message.content,
+          timestamp: message.createdAt,
+          unread: 0,
+          messages: []
+        });
+      }
+      
+      conversationsMap.get(conversationKey).messages.push({
+        id: message.id,
+        messageId: message.messageId,
+        sender: message.fromUserId === req.user.id ? 'You' : `${message.fromUser.firstName} ${message.fromUser.lastName}`,
+        senderUserId: message.fromUser.userId,
+        receiverUserId: message.toUser.userId,
+        text: message.content,
+        timestamp: message.createdAt,
+        isOwn: message.fromUserId === req.user.id,
+        priority: message.priority,
+        messageType: message.messageType,
+        isRead: message.isRead
       });
-    }
-
-    res.json({ message });
-  } catch (error) {
-    console.error('Get message error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Send message
-router.post('/', auth, checkPermission('messages', 'create'), validate(messageSchemas.create), async (req, res) => {
-  try {
-    const { receiver, subject, content, messageType, priority, relatedTo, parentMessage } = req.body;
-
-    // Generate thread ID for conversation tracking
-    let threadId = req.body.threadId;
-    if (parentMessage) {
-      const parent = await Message.findById(parentMessage);
-      threadId = parent?.threadId || parent?._id.toString();
-    } else {
-      threadId = `thread-${Date.now()}-${req.user._id}`;
-    }
-
-    const message = new Message({
-      sender: req.user._id,
-      receiver,
-      subject,
-      content,
-      messageType: messageType || 'normal',
-      priority: priority || 'medium',
-      relatedTo,
-      parentMessage,
-      isReply: !!parentMessage,
-      threadId
     });
 
-    await message.save();
-    await message.populate('sender', 'firstName lastName username');
-    await message.populate('receiver', 'firstName lastName username');
-
-    // Create or update conversation
-    await updateConversation(req.user._id, receiver, subject, message._id);
-
-    // Create notification for receiver
-    await createMessageNotification(receiver, message);
-
-    // Emit real-time message
-    const io = req.app.get('io');
-    io.to(receiver).emit('new_message', {
-      messageId: message._id,
-      sender: message.sender,
-      subject: message.subject,
-      priority: message.priority,
-      createdAt: message.createdAt
-    });
-
-    res.status(201).json({ message: 'Message sent successfully', message });
-  } catch (error) {
-    console.error('Send message error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Reply to message
-router.post('/:id/reply', auth, checkPermission('messages', 'create'), async (req, res) => {
-  try {
-    const { content } = req.body;
+    const conversations = Array.from(conversationsMap.values());
     
-    const originalMessage = await Message.findById(req.params.id);
-    if (!originalMessage) {
-      return res.status(404).json({ message: 'Original message not found' });
-    }
+    // Filter by search if provided
+    const filteredConversations = search ? 
+      conversations.filter(conv => 
+        conv.participant.firstName.toLowerCase().includes(search.toLowerCase()) ||
+        conv.participant.lastName.toLowerCase().includes(search.toLowerCase()) ||
+        conv.participant.userId.toLowerCase().includes(search.toLowerCase())
+      ) : conversations;
 
-    // Check if user can reply
-    if (originalMessage.receiver._id.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Can only reply to received messages' });
-    }
-
-    const replyMessage = new Message({
-      sender: req.user._id,
-      receiver: originalMessage.sender,
-      subject: `Re: ${originalMessage.subject}`,
-      content,
-      parentMessage: originalMessage._id,
-      isReply: true,
-      threadId: originalMessage.threadId || originalMessage._id.toString(),
-      messageType: originalMessage.messageType,
-      relatedTo: originalMessage.relatedTo
-    });
-
-    await replyMessage.save();
-    await replyMessage.populate('sender', 'firstName lastName username');
-    await replyMessage.populate('receiver', 'firstName lastName username');
-
-    // Update conversation
-    await updateConversation(req.user._id, originalMessage.sender, replyMessage.subject, replyMessage._id);
-
-    // Create notification
-    await createMessageNotification(originalMessage.sender, replyMessage);
-
-    // Emit real-time message
-    const io = req.app.get('io');
-    io.to(originalMessage.sender.toString()).emit('new_message', {
-      messageId: replyMessage._id,
-      sender: replyMessage.sender,
-      subject: replyMessage.subject,
-      priority: replyMessage.priority,
-      createdAt: replyMessage.createdAt
-    });
-
-    res.status(201).json({ message: 'Reply sent successfully', message: replyMessage });
-  } catch (error) {
-    console.error('Reply message error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Delete message
-router.delete('/:id', auth, checkPermission('messages', 'delete'), async (req, res) => {
-  try {
-    const message = await Message.findById(req.params.id);
-    if (!message) {
-      return res.status(404).json({ message: 'Message not found' });
-    }
-
-    // Soft delete based on user role
-    if (message.sender._id.toString() === req.user._id.toString()) {
-      message.isDeleted.sender = true;
-    } else if (message.receiver._id.toString() === req.user._id.toString()) {
-      message.isDeleted.receiver = true;
-    } else {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    await message.save();
-    res.json({ message: 'Message deleted successfully' });
-  } catch (error) {
-    console.error('Delete message error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// CONVERSATIONS ROUTES
-// Get conversations
-router.get('/conversations/list', auth, checkPermission('messages', 'read'), async (req, res) => {
-  try {
-    const { page = 1, limit = 10 } = req.query;
-
-    const conversations = await Conversation.find({
-      participants: req.user._id,
-      isArchived: false
-    })
-    .populate('participants', 'firstName lastName username')
-    .populate('lastMessage')
-    .sort({ lastMessageAt: -1 })
-    .limit(limit * 1)
-    .skip((page - 1) * limit);
-
-    const total = await Conversation.countDocuments({
-      participants: req.user._id,
-      isArchived: false
-    });
-
-    res.json({
-      conversations,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
-    });
+    res.json({ conversations: filteredConversations });
   } catch (error) {
     console.error('Get conversations error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Get conversation messages
-router.get('/conversations/:id/messages', auth, checkPermission('messages', 'read'), async (req, res) => {
+// Get messages for a specific conversation
+router.get('/conversations/:userId/messages', auth, async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-
-    const conversation = await Conversation.findById(req.params.id);
-    if (!conversation) {
-      return res.status(404).json({ message: 'Conversation not found' });
+    const { userId } = req.params;
+    
+    // Find the other user
+    const otherUser = await User.findOne({ where: { id: userId } });
+    if (!otherUser) {
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    // Check if user is participant
-    if (!conversation.participants.includes(req.user._id)) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
+    const messages = await InternalMessage.findAll({
+      where: {
+        [require('sequelize').Op.or]: [
+          { fromUserId: req.user.id, toUserId: userId },
+          { fromUserId: userId, toUserId: req.user.id }
+        ]
+      },
+      include: [
+        {
+          model: User,
+          as: 'fromUser',
+          attributes: ['id', 'userId', 'firstName', 'lastName', 'username']
+        },
+        {
+          model: User,
+          as: 'toUser',
+          attributes: ['id', 'userId', 'firstName', 'lastName', 'username']
+        }
+      ],
+      order: [['createdAt', 'ASC']]
+    });
 
-    const messages = await Message.find({
-      $or: [
-        { sender: req.user._id, receiver: { $in: conversation.participants } },
-        { sender: { $in: conversation.participants }, receiver: req.user._id }
-      ]
-    })
-    .populate('sender', 'firstName lastName username')
-    .populate('receiver', 'firstName lastName username')
-    .sort({ createdAt: -1 })
-    .limit(limit * 1)
-    .skip((page - 1) * limit);
+    // Mark received messages as read
+    await InternalMessage.update(
+      { isRead: true, readAt: new Date() },
+      { 
+        where: { 
+          fromUserId: userId, 
+          toUserId: req.user.id, 
+          isRead: false 
+        } 
+      }
+    );
 
-    res.json({ messages: messages.reverse() });
+    const formattedMessages = messages.map(message => ({
+      id: message.id,
+      messageId: message.messageId,
+      sender: message.fromUserId === req.user.id ? 'You' : `${message.fromUser.firstName} ${message.fromUser.lastName}`,
+      senderUserId: message.fromUser.userId,
+      receiverUserId: message.toUser.userId,
+      text: message.content,
+      timestamp: message.createdAt,
+      isOwn: message.fromUserId === req.user.id,
+      priority: message.priority,
+      messageType: message.messageType,
+      isRead: message.isRead
+    }));
+
+    res.json({ messages: formattedMessages, otherUser });
   } catch (error) {
     console.error('Get conversation messages error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// NOTIFICATIONS ROUTES
-// Get notifications
-router.get('/notifications', auth, async (req, res) => {
+// Send a new message
+router.post('/send', auth, async (req, res) => {
   try {
-    const { page = 1, limit = 10, category, isRead } = req.query;
+    const { toUserId, subject, content, priority = 'medium', messageType = 'general' } = req.body;
+
+    if (!toUserId || !content) {
+      return res.status(400).json({ message: 'Recipient and message content are required' });
+    }
+
+    // Verify recipient exists
+    const recipient = await User.findOne({ where: { id: toUserId, isActive: true } });
+    if (!recipient) {
+      return res.status(404).json({ message: 'Recipient not found' });
+    }
+
+    // Generate unique message ID
+    const messageId = `MSG${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+
+    const message = await InternalMessage.create({
+      messageId,
+      fromUserId: req.user.id,
+      toUserId,
+      subject: subject || 'No Subject',
+      content,
+      priority,
+      messageType
+    });
+
+    // Get the created message with user details
+    const createdMessage = await InternalMessage.findByPk(message.id, {
+      include: [
+        {
+          model: User,
+          as: 'fromUser',
+          attributes: ['id', 'userId', 'firstName', 'lastName', 'username']
+        },
+        {
+          model: User,
+          as: 'toUser',
+          attributes: ['id', 'userId', 'firstName', 'lastName', 'username']
+        }
+      ]
+    });
+
+    res.status(201).json({ 
+      message: 'Message sent successfully', 
+      data: createdMessage 
+    });
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get unread message count
+router.get('/unread-count', auth, async (req, res) => {
+  try {
+    const count = await InternalMessage.count({
+      where: {
+        toUserId: req.user.id,
+        isRead: false,
+        isArchived: false
+      }
+    });
+
+    res.json({ count });
+  } catch (error) {
+    console.error('Get unread count error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Mark message as read
+router.put('/:messageId/read', auth, async (req, res) => {
+  try {
+    const { messageId } = req.params;
     
-    let query = { recipient: req.user._id, isDeleted: false };
-    if (category) query.category = category;
-    if (isRead !== undefined) query.isRead = isRead === 'true';
-
-    const notifications = await Notification.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Notification.countDocuments(query);
-    const unreadCount = await Notification.countDocuments({
-      recipient: req.user._id,
-      isRead: false,
-      isDeleted: false
+    const message = await InternalMessage.findOne({
+      where: { 
+        id: messageId,
+        toUserId: req.user.id 
+      }
     });
 
-    res.json({
-      notifications,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total,
-      unreadCount
-    });
-  } catch (error) {
-    console.error('Get notifications error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Mark notification as read
-router.put('/notifications/:id/read', auth, async (req, res) => {
-  try {
-    const notification = await Notification.findOneAndUpdate(
-      { _id: req.params.id, recipient: req.user._id },
-      { isRead: true, readAt: new Date() },
-      { new: true }
-    );
-
-    if (!notification) {
-      return res.status(404).json({ message: 'Notification not found' });
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
     }
 
-    res.json({ message: 'Notification marked as read', notification });
-  } catch (error) {
-    console.error('Mark notification read error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Mark all notifications as read
-router.put('/notifications/mark-all-read', auth, async (req, res) => {
-  try {
-    await Notification.updateMany(
-      { recipient: req.user._id, isRead: false },
-      { isRead: true, readAt: new Date() }
-    );
-
-    res.json({ message: 'All notifications marked as read' });
-  } catch (error) {
-    console.error('Mark all notifications read error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Helper functions
-async function updateConversation(senderId, receiverId, subject, messageId) {
-  const participants = [senderId, receiverId];
-  
-  let conversation = await Conversation.findOne({
-    participants: { $all: participants, $size: 2 }
-  });
-
-  if (!conversation) {
-    conversation = new Conversation({
-      participants,
-      subject,
-      lastMessage: messageId,
-      lastMessageAt: new Date(),
-      messageCount: 1
+    await message.update({
+      isRead: true,
+      readAt: new Date()
     });
-  } else {
-    conversation.lastMessage = messageId;
-    conversation.lastMessageAt = new Date();
-    conversation.messageCount += 1;
+
+    res.json({ message: 'Message marked as read' });
+  } catch (error) {
+    console.error('Mark message read error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
+});
 
-  await conversation.save();
-  return conversation;
-}
+// Archive message
+router.put('/:messageId/archive', auth, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    
+    const message = await InternalMessage.findOne({
+      where: { 
+        id: messageId,
+        [require('sequelize').Op.or]: [
+          { fromUserId: req.user.id },
+          { toUserId: req.user.id }
+        ]
+      }
+    });
 
-async function createMessageNotification(recipientId, message) {
-  const notification = new Notification({
-    recipient: recipientId,
-    title: 'New Message',
-    message: `New message from ${message.sender.firstName} ${message.sender.lastName}: ${message.subject}`,
-    type: 'info',
-    category: 'message',
-    actionUrl: `/messages/${message._id}`,
-    relatedTo: {
-      type: 'message',
-      id: message._id
+    if (!message) {
+      return res.status(404).json({ message: 'Message not found' });
     }
-  });
 
-  await notification.save();
-  return notification;
-}
+    await message.update({ isArchived: true });
+
+    res.json({ message: 'Message archived successfully' });
+  } catch (error) {
+    console.error('Archive message error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+module.exports = router;
 
 module.exports = router;

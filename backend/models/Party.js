@@ -55,9 +55,15 @@ const Party = sequelize.define('Party', {
   gstNumber: {
     type: DataTypes.STRING(15),
     unique: true,
+    allowNull: true,  // Allow null for parties without GST
     validate: {
       len: [15, 15],
-      isAlphanumeric: true
+      isAlphanumeric: true,
+      isValidGST(value) {
+        if (value && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(value)) {
+          throw new Error('Invalid GST number format');
+        }
+      }
     }
   },
   panNumber: {
@@ -95,6 +101,30 @@ const Party = sequelize.define('Party', {
 }, {
   tableName: 'parties',
   timestamps: true,
+  hooks: {
+    beforeCreate: async (party) => {
+      // Generate unique party code if not provided
+      if (!party.partyCode) {
+        const prefix = party.type === 'customer' ? 'CUST' : 
+                      party.type === 'vendor' ? 'VEND' : 'PRTY';
+        
+        const latestParty = await Party.findOne({
+          where: { type: party.type },
+          order: [['createdAt', 'DESC']]
+        });
+        
+        let nextNumber = 1;
+        if (latestParty && latestParty.partyCode) {
+          const match = latestParty.partyCode.match(/\d+$/);
+          if (match) {
+            nextNumber = parseInt(match[0]) + 1;
+          }
+        }
+        
+        party.partyCode = `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+      }
+    }
+  },
   indexes: [
     {
       fields: ['party_code']

@@ -2,7 +2,7 @@ const sequelize = require('../config/database');
 
 // Import all models
 const User = require('./User');
-const { Customer, Vendor, Item, Invoice, Quotation, Payment } = require('./Accounting');
+const { Invoice, Quotation, Payment } = require('./Accounting');
 const { Order, JobCard, DeliveryChallan } = require('./Order');
 const { Inventory, StockMovement, GRN, GatePass } = require('./Inventory');
 const { Process, QualityControl, InspectionReport } = require('./Process');
@@ -52,27 +52,24 @@ COC.belongsTo(Job, { foreignKey: 'jobId', as: 'job' });
 COC.hasMany(DimensionReport, { foreignKey: 'cocId', as: 'dimensionReports' });
 DimensionReport.belongsTo(COC, { foreignKey: 'cocId', as: 'certificate' });
 
-User.hasMany(InternalMessage, { foreignKey: 'fromUserId', as: 'SentInternalMessages' });
-User.hasMany(InternalMessage, { foreignKey: 'toUserId', as: 'ReceivedInternalMessages' });
-InternalMessage.belongsTo(User, { foreignKey: 'fromUserId', as: 'Sender' });
-InternalMessage.belongsTo(User, { foreignKey: 'toUserId', as: 'Recipient' });
+User.hasMany(InternalMessage, { foreignKey: 'fromUserId', as: 'sentInternalMessages' });
+User.hasMany(InternalMessage, { foreignKey: 'toUserId', as: 'receivedInternalMessages' });
+InternalMessage.belongsTo(User, { foreignKey: 'fromUserId', as: 'fromUser' });
+InternalMessage.belongsTo(User, { foreignKey: 'toUserId', as: 'toUser' });
 
 // Material relationships
 Material.belongsTo(Party, { foreignKey: 'preferredSupplierId', as: 'PreferredSupplier' });
 OrderItem.belongsTo(Material, { foreignKey: 'materialId', as: 'material' });
 
-// Existing legacy associations (maintained for compatibility)
-Customer.hasMany(Invoice, { foreignKey: 'customer', as: 'invoices' });
-Customer.hasMany(Order, { foreignKey: 'customer', as: 'legacyOrders' });
-Customer.hasMany(Quotation, { foreignKey: 'customer', as: 'quotations' });
+// Existing legacy associations (maintained for compatibility - using Party instead of Customer/Vendor)
+Party.hasMany(Invoice, { foreignKey: 'partyId', as: 'invoices' });
+Party.hasMany(Quotation, { foreignKey: 'partyId', as: 'quotations' });
+Party.hasMany(Payment, { foreignKey: 'partyId', as: 'payments' });
 
-Vendor.hasMany(Order, { foreignKey: 'vendor', as: 'vendorOrders' });
-Vendor.hasMany(GRN, { foreignKey: 'vendor', as: 'grns' });
-
-Item.hasMany(Inventory, { foreignKey: 'item', as: 'inventoryRecords' });
-Item.hasMany(StockMovement, { foreignKey: 'item', as: 'stockMovements' });
-Item.hasMany(BOM, { foreignKey: 'parentItem', as: 'boms' });
-Item.hasMany(MaterialSpecification, { foreignKey: 'material', as: 'materialSpecs' });
+// Invoice associations
+Invoice.belongsTo(Party, { foreignKey: 'partyId', as: 'party' });
+Quotation.belongsTo(Party, { foreignKey: 'partyId', as: 'party' });
+Payment.belongsTo(Party, { foreignKey: 'partyId', as: 'party' });
 
 Order.hasMany(JobCard, { foreignKey: 'order', as: 'jobCards' });
 Order.hasMany(DeliveryChallan, { foreignKey: 'order', as: 'deliveryChallans' });
@@ -99,9 +96,6 @@ sequelize.sync({ force: false })
 module.exports = {
   sequelize,
   User,
-  Customer,
-  Vendor,
-  Item,
   Invoice,
   Quotation,
   Payment,

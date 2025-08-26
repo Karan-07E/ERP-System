@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   MessageSquare, 
   Send, 
@@ -7,8 +7,6 @@ import {
   Bell, 
   Users, 
   User, 
-  Clock, 
-  Check, 
   CheckCheck,
   MoreHorizontal,
   MoreVertical,
@@ -19,8 +17,11 @@ import {
   Video,
   Info,
   Archive,
+  // eslint-disable-next-line no-unused-vars
   Trash2
 } from 'lucide-react';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const Messages = () => {
   const [activeTab, setActiveTab] = useState('conversations');
@@ -29,11 +30,14 @@ const Messages = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
-  const [showContacts, setShowContacts] = useState(false);
   const [loading, setLoading] = useState(false);
   const [attachments, setAttachments] = useState([]);
-  const [showAttachmentModal, setShowAttachmentModal] = useState(false);
   const fileInputRef = useRef(null);
+
+  // State for API data
+  const [conversations, setConversations] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [currentMessages, setCurrentMessages] = useState([]);
 
   // New conversation form
   const [newConversationForm, setNewConversationForm] = useState({
@@ -41,48 +45,160 @@ const Messages = () => {
     initialMessage: ''
   });
 
-  // Available contacts/users to start conversations with
-  const [allUsers, setAllUsers] = useState([
-    { id: 1, name: 'John Smith', role: 'Production Manager', department: 'Production', email: 'john.smith@company.com' },
-    { id: 2, name: 'Sarah Johnson', role: 'Quality Assurance', department: 'Quality', email: 'sarah.johnson@company.com' },
-    { id: 3, name: 'Mike Davis', role: 'Inventory Manager', department: 'Logistics', email: 'mike.davis@company.com' },
-    { id: 4, name: 'Emily Chen', role: 'Process Engineer', department: 'Engineering', email: 'emily.chen@company.com' },
-    { id: 5, name: 'David Wilson', role: 'Maintenance Lead', department: 'Maintenance', email: 'david.wilson@company.com' },
-    { id: 6, name: 'Lisa Brown', role: 'HR Manager', department: 'Human Resources', email: 'lisa.brown@company.com' },
-    { id: 7, name: 'Tom Anderson', role: 'IT Specialist', department: 'Information Technology', email: 'tom.anderson@company.com' }
-  ]);
+  // Fetch all users for messaging
+  const fetchUsers = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/messages/users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-  // Sample data - replace with actual API calls
-  const [conversations, setConversations] = useState([
-    {
-      id: 1,
-      participant: { name: 'John Smith', role: 'Production Manager', avatar: null },
-      lastMessage: 'Thanks for the update on the inventory status',
-      timestamp: new Date(Date.now() - 15 * 60 * 1000),
-      unread: 2,
-      messages: [
-        { id: 1, sender: 'John Smith', text: 'Hi, can you check the current inventory levels?', timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), isOwn: false },
-        { id: 2, sender: 'You', text: 'Sure, let me pull the latest report', timestamp: new Date(Date.now() - 90 * 60 * 1000), isOwn: true },
-        { id: 3, sender: 'You', text: 'Current inventory levels attached', timestamp: new Date(Date.now() - 75 * 60 * 1000), isOwn: true, 
-          attachments: [{ name: 'inventory_report.pdf', size: '2.1 MB', type: 'application/pdf', url: '#' }] },
-        { id: 4, sender: 'John Smith', text: 'Thanks for the update on the inventory status', timestamp: new Date(Date.now() - 15 * 60 * 1000), isOwn: false }
-      ]
-    },
-    {
-      id: 2,
-      participant: { name: 'Sarah Johnson', role: 'Quality Assurance', avatar: null },
-      lastMessage: 'The audit report is ready for review',
-      timestamp: new Date(Date.now() - 45 * 60 * 1000),
-      unread: 0,
-      messages: [
-        { id: 1, sender: 'Sarah Johnson', text: 'Working on the audit report', timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), isOwn: false },
-        { id: 2, sender: 'You', text: 'Great, let me know when it\'s ready', timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), isOwn: true },
-        { id: 3, sender: 'Sarah Johnson', text: 'The audit report is ready for review', timestamp: new Date(Date.now() - 45 * 60 * 1000), isOwn: false,
-          attachments: [{ name: 'audit_report_july.xlsx', size: '1.8 MB', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', url: '#' }] }
-      ]
+      if (response.ok) {
+        const data = await response.json();
+        setAllUsers(data.users || []);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
     }
-  ]);
+  }, []);
 
+  // Fetch conversations
+  const fetchConversations = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/messages/conversations?search=${searchTerm}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setConversations(data.conversations || []);
+      }
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm]);
+
+  // Fetch messages for specific conversation
+  const fetchConversationMessages = async (userId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/messages/conversations/${userId}/messages`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentMessages(data.messages || []);
+      }
+    } catch (error) {
+      console.error('Error fetching conversation messages:', error);
+    }
+  };
+
+  // Send message
+  const sendMessage = async () => {
+    if (!messageText.trim() && attachments.length === 0) return;
+    if (!selectedConversation) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/messages/send`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          toUserId: selectedConversation.participant.id,
+          subject: 'Chat Message',
+          content: messageText,
+          priority: 'medium',
+          messageType: 'general'
+        })
+      });
+
+      if (response.ok) {
+        setMessageText('');
+        setAttachments([]);
+        // Refresh messages
+        await fetchConversationMessages(selectedConversation.participant.id);
+        await fetchConversations();
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  };
+
+  // Start new conversation
+  const startNewConversation = async () => {
+    if (!newConversationForm.participantId || !newConversationForm.initialMessage.trim()) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/messages/send`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          toUserId: newConversationForm.participantId,
+          subject: 'New Conversation',
+          content: newConversationForm.initialMessage,
+          priority: 'medium',
+          messageType: 'general'
+        })
+      });
+
+      if (response.ok) {
+        setNewConversationForm({ participantId: '', initialMessage: '' });
+        setShowNewMessage(false);
+        await fetchConversations();
+        
+        // Select the new conversation
+        const selectedUser = allUsers.find(user => user.id === newConversationForm.participantId);
+        if (selectedUser) {
+          setSelectedConversation({
+            id: selectedUser.id,
+            participant: selectedUser
+          });
+          await fetchConversationMessages(selectedUser.id);
+        }
+      }
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+    }
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchUsers();
+    fetchConversations();
+  }, [fetchUsers, fetchConversations]);
+
+  // Refetch conversations when search term changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchConversations();
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [fetchConversations]);
+
+  // Filter functions for sample data
   const [broadcasts, setBroadcasts] = useState([
     {
       id: 1,
@@ -122,15 +238,6 @@ const Messages = () => {
       timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
       read: false,
       priority: 'medium'
-    },
-    {
-      id: 3,
-      type: 'user',
-      title: 'New Message from John Smith',
-      message: 'Thanks for the update on the inventory status',
-      timestamp: new Date(Date.now() - 15 * 60 * 1000),
-      read: true,
-      priority: 'low'
     }
   ]);
 
@@ -140,112 +247,22 @@ const Messages = () => {
     recipients: []
   });
 
-  // Filter functions
-  const filteredConversations = conversations.filter(conv =>
-    conv.participant.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const filteredNotifications = notifications.filter(notif =>
-    notif.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    notif.message.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   // Get available users (those not in current conversations)
   const availableUsers = allUsers.filter(user => 
-    !conversations.some(conv => conv.participant.name === user.name)
+    !conversations.some(conv => conv.participant.id === user.id)
   );
 
-  // Start new conversation
-  const startNewConversation = () => {
-    if (!newConversationForm.participantId || !newConversationForm.initialMessage.trim()) return;
+  const formatTime = (date) => {
+    const now = new Date();
+    const diff = now - new Date(date);
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-    const selectedUser = allUsers.find(user => user.id.toString() === newConversationForm.participantId);
-    if (!selectedUser) return;
-
-    const newConversation = {
-      id: Date.now(),
-      participant: { 
-        name: selectedUser.name, 
-        role: selectedUser.role, 
-        department: selectedUser.department,
-        email: selectedUser.email,
-        avatar: null 
-      },
-      lastMessage: newConversationForm.initialMessage,
-      timestamp: new Date(),
-      unread: 0,
-      messages: [
-        {
-          id: 1,
-          sender: 'You',
-          text: newConversationForm.initialMessage,
-          timestamp: new Date(),
-          isOwn: true
-        }
-      ]
-    };
-
-    setConversations(prev => [newConversation, ...prev]);
-    setSelectedConversation(newConversation);
-    setNewConversationForm({ participantId: '', initialMessage: '' });
-    setShowNewMessage(false);
-  };
-
-  // Delete conversation
-  const deleteConversation = (conversationId) => {
-    if (window.confirm('Are you sure you want to delete this conversation?')) {
-      setConversations(prev => prev.filter(conv => conv.id !== conversationId));
-      if (selectedConversation?.id === conversationId) {
-        setSelectedConversation(null);
-      }
-    }
-  };
-
-  // Clear conversation messages
-  const clearConversation = (conversationId) => {
-    if (window.confirm('Are you sure you want to clear all messages in this conversation?')) {
-      setConversations(prev => prev.map(conv => 
-        conv.id === conversationId 
-          ? { ...conv, messages: [], lastMessage: '', timestamp: new Date() }
-          : conv
-      ));
-    }
-  };
-
-  // Mark conversation as read
-  const markConversationAsRead = (conversationId) => {
-    setConversations(prev => prev.map(conv =>
-      conv.id === conversationId ? { ...conv, unread: 0 } : conv
-    ));
-  };
-
-  // Send message function
-  const sendMessage = () => {
-    if (!messageText.trim() && attachments.length === 0) return;
-    if (!selectedConversation) return;
-    
-    const newMessage = {
-      id: Date.now(),
-      sender: 'You',
-      text: messageText,
-      timestamp: new Date(),
-      isOwn: true,
-      attachments: attachments.length > 0 ? [...attachments] : undefined
-    };
-
-    setConversations(prev => prev.map(conv => 
-      conv.id === selectedConversation.id 
-        ? { 
-            ...conv, 
-            messages: [...conv.messages, newMessage],
-            lastMessage: messageText || `Sent ${attachments.length} file(s)`,
-            timestamp: new Date()
-          }
-        : conv
-    ));
-
-    setMessageText('');
-    setAttachments([]);
+    if (minutes < 1) return 'now';
+    if (minutes < 60) return `${minutes}m`;
+    if (hours < 24) return `${hours}h`;
+    return `${days}d`;
   };
 
   // Handle file attachment
@@ -323,18 +340,30 @@ const Messages = () => {
     ));
   };
 
-  const formatTime = (date) => {
-    const now = new Date();
-    const diff = now - date;
-    const minutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-    if (minutes < 1) return 'now';
-    if (minutes < 60) return `${minutes}m`;
-    if (hours < 24) return `${hours}h`;
-    return `${days}d`;
+  // Functions for conversation management
+  const markConversationAsRead = (conversationId) => {
+    setConversations(prevConversations =>
+      prevConversations.map(conv =>
+        conv.id === conversationId ? { ...conv, unread: false } : conv
+      )
+    );
   };
+
+  const clearConversation = (conversationId) => {
+    // Clear message history for conversation
+    console.log('Clearing conversation:', conversationId);
+  };
+
+  const deleteConversation = (conversationId) => {
+    setConversations(prevConversations =>
+      prevConversations.filter(conv => conv.id !== conversationId)
+    );
+  };
+
+  const filteredNotifications = notifications.filter(notif => 
+    notif.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    notif.sender.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   // Make functions globally accessible for context menus
   React.useEffect(() => {
@@ -399,6 +428,13 @@ const Messages = () => {
                 />
               </div>
               <button
+                className="btn btn-secondary"
+                title="Filter conversations"
+                style={{ marginRight: '8px' }}
+              >
+                <Filter size={16} />
+              </button>
+              <button
                 className="btn btn-primary"
                 onClick={() => setShowNewMessage(true)}
                 title="Start New Conversation"
@@ -409,13 +445,22 @@ const Messages = () => {
             </div>
 
             <div className="conversations-list">
-              {filteredConversations.map(conversation => (
+              {loading ? (
+                <div className="loading-indicator" style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                  Loading conversations...
+                </div>
+              ) : conversations.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                  No conversations found
+                </div>
+              ) : (
+                conversations.map(conversation => (
                 <div
                   key={conversation.id}
                   className={`conversation-item ${selectedConversation?.id === conversation.id ? 'active' : ''}`}
                   onClick={() => {
                     setSelectedConversation(conversation);
-                    markConversationAsRead(conversation.id);
+                    fetchConversationMessages(conversation.participant.id);
                   }}
                 >
                   <div className="conversation-avatar">
@@ -423,7 +468,10 @@ const Messages = () => {
                   </div>
                   <div className="conversation-content">
                     <div className="conversation-header">
-                      <span className="participant-name">{conversation.participant.name}</span>
+                      <div className="participant-info">
+                        <span className="participant-name">{conversation.participant.firstName} {conversation.participant.lastName}</span>
+                        <span className="participant-id">ID: {conversation.participant.userId}</span>
+                      </div>
                       <span className="timestamp">{formatTime(conversation.timestamp)}</span>
                     </div>
                     <div className="conversation-preview">
@@ -438,24 +486,7 @@ const Messages = () => {
                       className="btn-icon conversation-menu"
                       onClick={(e) => {
                         e.stopPropagation();
-                        const rect = e.target.getBoundingClientRect();
-                        const menu = document.createElement('div');
-                        menu.className = 'context-menu';
-                        menu.innerHTML = `
-                          <div class="menu-item" onclick="markConversationAsRead(${conversation.id})">Mark as Read</div>
-                          <div class="menu-item" onclick="clearConversation(${conversation.id})">Clear Messages</div>
-                          <div class="menu-item danger" onclick="deleteConversation(${conversation.id})">Delete Conversation</div>
-                        `;
-                        menu.style.position = 'fixed';
-                        menu.style.top = `${rect.bottom}px`;
-                        menu.style.left = `${rect.left}px`;
-                        document.body.appendChild(menu);
-                        
-                        const closeMenu = () => {
-                          document.body.removeChild(menu);
-                          document.removeEventListener('click', closeMenu);
-                        };
-                        setTimeout(() => document.addEventListener('click', closeMenu), 100);
+                        // Add context menu functionality here
                       }}
                       title="Conversation Options"
                     >
@@ -463,7 +494,8 @@ const Messages = () => {
                     </button>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -474,8 +506,10 @@ const Messages = () => {
                   <div className="chat-participant">
                     <User size={24} />
                     <div>
-                      <h3>{selectedConversation.participant.name}</h3>
-                      <span className="role">{selectedConversation.participant.role} • {selectedConversation.participant.department}</span>
+                      <h3>{selectedConversation.participant.firstName} {selectedConversation.participant.lastName}</h3>
+                      <span className="role">
+                        ID: {selectedConversation.participant.userId} • {selectedConversation.participant.designation || 'Employee'} • {selectedConversation.participant.department || 'Department'}
+                      </span>
                     </div>
                   </div>
                   <div className="chat-actions">
@@ -525,7 +559,7 @@ const Messages = () => {
                 </div>
 
                 <div className="messages-container">
-                  {selectedConversation.messages.map(message => (
+                  {currentMessages.map(message => (
                     <div
                       key={message.id}
                       className={`message ${message.isOwn ? 'own' : 'other'}`}

@@ -205,11 +205,11 @@ const Invoice = sequelize.define('Invoice', {
   tableName: 'invoices',
   timestamps: true,
   indexes: [
-    { fields: ['invoiceNumber'] },
-    { fields: ['partyId'] },
-    { fields: ['invoiceDate'] },
+    { fields: ['invoice_number'] },
+    { fields: ['party_id'] },
+    { fields: ['invoice_date'] },
     { fields: ['status'] },
-    { fields: ['paymentStatus'] }
+    { fields: ['payment_status'] }
   ]
 });
 
@@ -313,9 +313,9 @@ const Quotation = sequelize.define('Quotation', {
   tableName: 'quotations',
   timestamps: true,
   indexes: [
-    { fields: ['quotationNumber'] },
-    { fields: ['partyId'] },
-    { fields: ['quotationDate'] },
+    { fields: ['quotation_number'] },
+    { fields: ['party_id'] },
+    { fields: ['quotation_date'] },
     { fields: ['status'] }
   ]
 });
@@ -396,9 +396,9 @@ const Payment = sequelize.define('Payment', {
   tableName: 'payments',
   timestamps: true,
   indexes: [
-    { fields: ['paymentNumber'] },
-    { fields: ['partyId'] },
-    { fields: ['paymentDate'] },
+    { fields: ['payment_number'] },
+    { fields: ['party_id'] },
+    { fields: ['payment_date'] },
     { fields: ['type'] },
     { fields: ['status'] }
   ]
