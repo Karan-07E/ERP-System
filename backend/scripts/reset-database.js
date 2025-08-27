@@ -18,7 +18,7 @@ const resetDatabase = async () => {
     console.log('   📊 Phase 1: Core Data Model Changes (Party, Order, Job, GST)');
     console.log('   🎛️  Phase 2: Enhanced Dashboard & UI');  
     console.log('   📄 Phase 3: COC & Advanced Reporting');
-    console.log('   🔧 Phase 4: Backup/Restore & Material Management');
+    console.log('   🔧 Phase 4: Material Management');
     console.log('');
     console.log('🏃‍♂️ Run the server now with: node server.js');
     

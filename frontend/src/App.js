@@ -14,8 +14,6 @@ import Reports from './pages/Reports';
 import Messages from './pages/Messages';
 import Users from './pages/Users';
 import Parties from './pages/Parties';
-import EnhancedDashboard from './pages/EnhancedDashboard';
-import BackupRestore from './pages/BackupRestore';
 import Analytics from './pages/Analytics';
 
 // Protected Route Component
@@ -77,7 +75,6 @@ function App() {
               <Route path="messages/*" element={<Messages />} />
               <Route path="users/*" element={<Users />} />
               <Route path="parties/*" element={<Parties />} />
-              <Route path="backup/*" element={<BackupRestore />} />
               <Route path="analytics/*" element={<Analytics />} />
             </Route>
           </Routes>

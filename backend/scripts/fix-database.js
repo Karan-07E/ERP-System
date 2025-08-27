@@ -176,14 +176,13 @@ const fixDatabase = async () => {
     console.log('   📊 Phase 1: Core Data Model (Party, Order, Job, GST)');
     console.log('   🎛️  Phase 2: Enhanced Dashboard & UI');
     console.log('   📄 Phase 3: COC & Advanced Reporting');
-    console.log('   🔧 Phase 4: Backup/Restore & Material Management');
+    console.log('   🔧 Phase 4: Material Management');
     console.log('');
     console.log('🔗 Available endpoints:');
     console.log('   /api/parties - Unified party management');
     console.log('   /api/jobs - Advanced job tracking');
     console.log('   /api/coc - Certificate of Conformance');
     console.log('   /api/analytics - Advanced reporting');
-    console.log('   /api/backup - Backup/restore functionality');
     console.log('   /api/materials - Material management with alerts');
     console.log('');
     console.log('👤 Default admin login:');

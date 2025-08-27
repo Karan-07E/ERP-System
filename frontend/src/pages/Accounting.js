@@ -32,10 +32,6 @@ const Accounting = () => {
   const [payments, setPayments] = useState([]);
   const [reports, setReports] = useState({});
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab, fetchData]);
-
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -87,6 +83,10 @@ const Accounting = () => {
       setLoading(false);
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    fetchData();
+  }, [activeTab, fetchData]);
 
   const handleCreate = () => {
     setModalType('create');

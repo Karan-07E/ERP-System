@@ -23,7 +23,6 @@ const partyRoutes = require('./routes/parties');
 const jobRoutes = require('./routes/jobs');
 const dashboardRoutes = require('./routes/dashboard');
 const cocRoutes = require('./routes/coc');
-const backupRoutes = require('./routes/backup');
 const analyticsRoutes = require('./routes/analytics');
 
 const app = express();
@@ -168,7 +167,6 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/parties', require('./routes/parties'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/coc', require('./routes/coc'));
-app.use('/api/backup', require('./routes/backup'));
 app.use('/api/analytics', require('./routes/analytics'));
 
 // API Health check - v2

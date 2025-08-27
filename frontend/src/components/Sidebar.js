@@ -70,11 +70,6 @@ const Sidebar = ({ isOpen }) => {
       label: 'Users'
     },
     {
-      path: '/backup',
-      icon: Database,
-      label: 'Backup'
-    },
-    {
       path: '/analytics',
       icon: TrendingUp,
       label: 'Analytics'
