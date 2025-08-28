@@ -30,7 +30,7 @@ const Accounting = () => {
   const [invoices, setInvoices] = useState([]);
   const [quotations, setQuotations] = useState([]);
   const [payments, setPayments] = useState([]);
-  const [reports, setReports] = useState({});
+  // const [reports, setReports] = useState({}); // Commented out as it's assigned but never used
 
   const fetchData = useCallback(async () => {
     try {
@@ -65,13 +65,14 @@ const Accounting = () => {
               axios.get(`/api/accounting/reports/hsn-summary?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`)
             ]);
             
-            setReports({
-              salesSummary: salesSummary.data,
-              hsnSummary: hsnSummary.data
-            });
+            // setReports({
+            //   salesSummary: salesSummary.data,
+            //   hsnSummary: hsnSummary.data
+            // });
+            console.log('Reports data loaded:', { salesSummary: salesSummary.data, hsnSummary: hsnSummary.data });
           } catch (reportError) {
             console.log('Report data not available:', reportError);
-            setReports({});
+            // setReports({});
           }
           break;
         default:

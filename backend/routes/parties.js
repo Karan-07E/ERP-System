@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Party } = require('../models');
 const { auth } = require('../middleware/auth');
+const { Op } = require('sequelize');
 
 // Helper function to generate party code
 const generatePartyCode = async (type) => {

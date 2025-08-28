@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Calendar, Filter, FileText, Table, PieChart } from 'lucide-react';
+import { Download, FileText, Table, PieChart, TrendingUp } from 'lucide-react';
 import API_BASE_URL from '../api/config';
 
 const ReportGenerator = ({ onClose }) => {

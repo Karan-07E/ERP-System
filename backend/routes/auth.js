@@ -73,8 +73,13 @@ router.post('/register', validate(userSchemas.register), async (req, res) => {
         break;
     }
 
+    // Generate userId
+    const userCount = await User.count();
+    const userId = `U${String(userCount + 1).padStart(4, '0')}`;
+
     // Create new user
     const user = await User.create({
+      userId,
       username,
       email,
       password,

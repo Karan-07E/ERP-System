@@ -4,7 +4,7 @@ import axios from 'axios';
 export const API_BASE_URL = process.env.REACT_APP_API_URL || (
   process.env.NODE_ENV === 'production' 
     ? 'https://eee111.onrender.com'
-    : 'http://localhost:5000'
+    : 'http://localhost:5001/api'
 );
 
 // Set default base URL

@@ -11,7 +11,6 @@ import {
   MessageSquare, 
   Users,
   Building2,
-  Database,
   TrendingUp
 } from 'lucide-react';
 

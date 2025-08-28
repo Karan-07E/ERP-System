@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, 
   CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
 import { 
   TrendingUp, TrendingDown, DollarSign, Users, Package, AlertTriangle,
-  Calendar, Download, Filter, Eye, RefreshCw, FileText, PieChart as PieChartIcon,
+  Download, RefreshCw, FileText, PieChart as PieChartIcon,
   BarChart3, Target, Award, Clock, CheckCircle
 } from 'lucide-react';
 import API_BASE_URL from '../api/config';
@@ -37,7 +37,7 @@ const Analytics = () => {
     if (activeTab === 'gst') fetchGSTData();
     if (activeTab === 'jobs') fetchJobAnalytics();
     if (activeTab === 'parties') fetchPartyAnalysis();
-  }, [activeTab, dateRange]);
+  }, [activeTab, dateRange, fetchGSTData, fetchJobAnalytics, fetchPartyAnalysis]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -60,7 +60,7 @@ const Analytics = () => {
     }
   };
 
-  const fetchGSTData = async () => {
+  const fetchGSTData = useCallback(async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -82,9 +82,9 @@ const Analytics = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange.startDate, dateRange.endDate]);
 
-  const fetchJobAnalytics = async () => {
+  const fetchJobAnalytics = useCallback(async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -103,9 +103,9 @@ const Analytics = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchPartyAnalysis = async () => {
+  const fetchPartyAnalysis = useCallback(async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -124,7 +124,7 @@ const Analytics = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const exportReport = async (reportType, format = 'csv') => {
     try {

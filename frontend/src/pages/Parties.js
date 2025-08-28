@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, 
   Search, 
@@ -22,6 +22,8 @@ const Parties = () => {
   const [selectedParty, setSelectedParty] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -85,12 +87,22 @@ const Parties = () => {
   ];
 
   useEffect(() => {
+    // Check if user is authenticated
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.warn('No authentication token found');
+      setError('Please log in to access this page');
+      return;
+    }
+    
     fetchParties();
   }, [currentPage, searchTerm, filterType]);
 
   const fetchParties = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
       const params = new URLSearchParams({
         page: currentPage,
         limit: 20,
@@ -98,13 +110,22 @@ const Parties = () => {
         ...(filterType !== 'all' && { type: filterType })
       });
 
+      console.log('Fetching parties with params:', params.toString());
       const response = await api.get(`/parties?${params}`);
+      console.log('Fetch parties response:', response.data);
+      
       if (response.data.success) {
-        setParties(response.data.data.parties);
-        setTotalPages(response.data.data.pagination.pages);
+        setParties(response.data.data.parties || []);
+        setTotalPages(response.data.data.pagination?.pages || 1);
+      } else {
+        setError('Failed to fetch parties');
+        setParties([]);
       }
     } catch (error) {
       console.error('Error fetching parties:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch parties';
+      setError(errorMessage);
+      setParties([]);
     } finally {
       setLoading(false);
     }
@@ -112,26 +133,44 @@ const Parties = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    
     try {
+      console.log('Submitting form data:', formData);
+      
       if (selectedParty) {
         // Update party
+        console.log('Updating party with ID:', selectedParty.id);
         const response = await api.put(`/parties/${selectedParty.id}`, formData);
+        console.log('Update response:', response.data);
+        
         if (response.data.success) {
           setShowEditModal(false);
-          fetchParties();
+          await fetchParties();
           resetForm();
+          alert('Party updated successfully!');
         }
       } else {
         // Create party
+        console.log('Creating new party...');
         const response = await api.post('/parties', formData);
+        console.log('Create response:', response.data);
+        
         if (response.data.success) {
           setShowAddModal(false);
-          fetchParties();
+          await fetchParties();
           resetForm();
+          alert('Party created successfully!');
         }
       }
     } catch (error) {
       console.error('Error saving party:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save party';
+      setError(errorMessage);
+      alert(`Error: ${errorMessage}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -180,6 +219,8 @@ const Parties = () => {
       notes: ''
     });
     setSelectedParty(null);
+    setError(null);
+    setSubmitting(false);
   };
 
   const getTypeColor = (type) => {
@@ -206,428 +247,467 @@ const Parties = () => {
 
   return (
     <>
-      <div className="parties-container">
-      <div className="content-wrapper">
-        {/* Header */}
-        <div className="header-card">
-          <div className="header-content">
-            <div>
-              <h1 className="header-title">
-                <Building className="text-blue-600" size={32} />
-                Parties Management
-              </h1>
-              <p className="header-subtitle">Manage customers, vendors, and business partners</p>
-            </div>
-                        <button
-              onClick={() => setShowAddModal(true)}
-              className="add-button"
-            >
-              <Plus size={20} />
-              Add Party
-            </button>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="filters-card">
-          <div className="filters-content">
-            <div className="search-container">
-              <div className="relative">
-                <Search className="search-icon" size={20} />
-                <input
-                  type="text"
-                  placeholder="Search parties by name, code, or contact..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="search-input"
-                />
+      <div className="page">
+        <div className="content-wrapper">
+          {/* Header */}
+          <div className="header-card">
+            <div className="header-content">
+              <div>
+                <h1 className="header-title">
+                  <Building className="text-blue-600" size={32} />
+                  Parties Management
+                </h1>
+                <p className="header-subtitle">Manage customers, vendors, and business partners</p>
               </div>
-            </div>
-            <div className="filter-controls">
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="filter-select"
-              >
-                <option value="all">All Types</option>
-                <option value="customer">Customers</option>
-                <option value="vendor">Vendors</option>
-                <option value="both">Both</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Parties Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {parties.length === 0 ? (
-            <div className="p-12 text-center">
-              <Building size={64} className="mx-auto text-gray-300 mb-6" />
-              <h3 className="text-xl font-medium text-gray-900 mb-3">No parties found</h3>
-              <p className="text-gray-600 mb-6">Add your first party to get started.</p>
               <button
                 onClick={() => setShowAddModal(true)}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
+                className="add-button"
+              >
+                <Plus size={20} />
+                Add Party
+              </button>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="filters-card">
+            <div className="filters-content">
+              <div className="search-container">
+                <div className="relative">
+                  <Search className="search-icon" size={20} />
+                  <input
+                    type="text"
+                    placeholder="Search parties by name, code, or contact..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
+                </div>
+              </div>
+              <div className="filter-controls">
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="filter-select"
+                >
+                  <option value="all">All Types</option>
+                  <option value="customer">Customers</option>
+                  <option value="vendor">Vendors</option>
+                  <option value="both">Both</option>
+                </select>
+              </div>
+            </div>
+            
+            {/* Error Display */}
+            {error && (
+              <div className="error-message">
+                <p>{error}</p>
+                <button onClick={() => setError(null)} className="error-close">×</button>
+              </div>
+            )}
+          </div>          {/* Parties Table */}
+          <div className="table-card">
+          {parties.length === 0 ? (
+            <div className="empty-state">
+              <Building size={64} className="empty-icon" />
+              <h3 className="empty-title">No parties found</h3>
+              <p className="empty-description">Add your first party to get started.</p>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="add-button"
               >
                 <Plus size={20} />
                 Add Party
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+            <div className="data-table">
+              <table className="table">
+                <thead className="table-header">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Party Details
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      GST Details
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Location
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    <th>Party Details</th>
+                    <th>Type</th>
+                    <th>Contact</th>
+                    <th>GST Details</th>
+                    <th>Location</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-              {parties.map((party) => (
-                <tr key={party.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <Building className="h-5 w-5 text-blue-600" />
+                <tbody className="table-body">
+                  {parties.map((party) => (
+                    <tr key={party.id} className="table-row">
+                      <td className="table-cell">
+                        <div className="party-info">
+                          <div className="party-avatar">
+                            <Building className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div className="party-details">
+                            <div className="party-name">{party.name}</div>
+                            <div className="party-code">{party.partyCode}</div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{party.name}</div>
-                        <div className="text-sm text-gray-500">{party.partyCode}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getTypeColor(party.type)}`}>
-                      {party.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{party.contactPerson}</div>
-                    <div className="text-sm text-gray-500 flex items-center gap-1">
-                      <Phone size={12} />
-                      {party.phone || party.mobile}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{party.gstNumber}</div>
-                    <div className="text-sm text-gray-500">State: {party.stateCode}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{party.city}</div>
-                    <div className="text-sm text-gray-500">{party.state}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleView(party)}
-                        className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-md transition-colors"
-                        title="View Details"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleEdit(party)}
-                        className="text-indigo-600 hover:text-indigo-800 p-2 hover:bg-indigo-50 rounded-md transition-colors"
-                        title="Edit Party"
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(party.id)}
-                        className="text-red-600 hover:text-red-800 p-2 hover:bg-red-50 rounded-md transition-colors"
-                        title="Delete Party"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                      <td className="table-cell">
+                        <span className={`type-badge ${getTypeColor(party.type).replace('bg-', 'type-').replace('-100', '').replace(' text-', ' type-')}`}>
+                          {party.type}
+                        </span>
+                      </td>
+                      <td className="table-cell">
+                        <div className="contact-info">{party.contactPerson}</div>
+                        <div className="contact-phone">
+                          <Phone size={12} />
+                          {party.phone || party.mobile}
+                        </div>
+                      </td>
+                      <td className="table-cell">
+                        <div className="gst-info">{party.gstNumber}</div>
+                        <div className="state-info">State: {party.stateCode}</div>
+                      </td>
+                      <td className="table-cell">
+                        <div className="location-city">{party.city}</div>
+                        <div className="location-state">{party.state}</div>
+                      </td>
+                      <td className="table-cell">
+                        <div className="actions-container">
+                          <button
+                            onClick={() => handleView(party)}
+                            className="action-button action-view"
+                            title="View Details"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(party)}
+                            className="action-button action-edit"
+                            title="Edit Party"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(party.id)}
+                            className="action-button action-delete"
+                            title="Delete Party"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center bg-gray-50">
-            <div className="text-sm text-gray-700 font-medium">
-              Page {currentPage} of {totalPages}
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="pagination">
+              <div className="pagination-info">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="pagination-buttons">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="pagination-button"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="pagination-button"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-white transition-colors"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-white transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+          )}
         </div>
+      </div>
 
       {/* Add/Edit Modal */}
       {(showAddModal || showEditModal) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
-              <h2 className="text-xl font-semibold">
-                {selectedParty ? 'Edit Party' : 'Add New Party'}
-              </h2>
-            </div>
-            
-            <div className="p-6">
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Party Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Type *
-                  </label>
-                  <select
-                    required
-                    value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="customer">Customer</option>
-                    <option value="vendor">Vendor</option>
-                    <option value="both">Both</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Contact Person
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.contactPerson}
-                    onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Mobile
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.mobile}
-                    onChange={(e) => setFormData({...formData, mobile: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    GST Number
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.gstNumber}
-                    onChange={(e) => setFormData({...formData, gstNumber: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    maxLength="15"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    PAN Number
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.panNumber}
-                    onChange={(e) => setFormData({...formData, panNumber: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    maxLength="10"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State *
-                  </label>
-                  <select
-                    required
-                    value={formData.state}
-                    onChange={(e) => {
-                      const selectedState = stateOptions.find(s => s.name === e.target.value);
-                      setFormData({
-                        ...formData, 
-                        state: e.target.value,
-                        stateCode: selectedState?.code || ''
-                      });
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select State</option>
-                    {stateOptions.map(state => (
-                      <option key={state.code} value={state.name}>
-                        {state.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.city}
-                    onChange={(e) => setFormData({...formData, city: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Pincode
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.pincode}
-                    onChange={(e) => setFormData({...formData, pincode: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Credit Limit
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.creditLimit}
-                    onChange={(e) => setFormData({...formData, creditLimit: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Address
-                </label>
-                <textarea
-                  value={formData.address}
-                  onChange={(e) => setFormData({...formData, address: e.target.value})}
-                  rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Payment Terms
-                </label>
-                <input
-                  type="text"
-                  value={formData.paymentTerms}
-                  onChange={(e) => setFormData({...formData, paymentTerms: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <div className="modal-header-content">
+                <h2 className="modal-title">
+                  {selectedParty ? 'Edit Party' : 'Add New Party'}
+                </h2>
                 <button
-                  type="button"
                   onClick={() => {
                     setShowAddModal(false);
                     setShowEditModal(false);
                     resetForm();
                   }}
-                  className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="close-button"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-colors"
-                >
-                  {selectedParty ? 'Update' : 'Create'} Party
+                  <X size={24} />
                 </button>
               </div>
-            </form>
+            </div>
+            
+            <div className="modal-body">
+              <form onSubmit={handleSubmit}>
+                {/* Basic Information Section */}
+                <div className="form-section">
+                  <h3 className="section-title">Basic Information</h3>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label className="form-label">
+                        Party Name <span className="required">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.name}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter party name"
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label className="form-label">
+                        Type <span className="required">*</span>
+                      </label>
+                      <select
+                        required
+                        value={formData.type}
+                        onChange={(e) => setFormData({...formData, type: e.target.value})}
+                        className="form-select"
+                      >
+                        <option value="customer">Customer</option>
+                        <option value="vendor">Vendor</option>
+                        <option value="both">Both</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Contact Person</label>
+                      <input
+                        type="text"
+                        value={formData.contactPerson}
+                        onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter contact person name"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Email</label>
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter email address"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Phone</label>
+                      <input
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter phone number"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Mobile</label>
+                      <input
+                        type="tel"
+                        value={formData.mobile}
+                        onChange={(e) => setFormData({...formData, mobile: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter mobile number"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tax Information Section */}
+                <div className="form-section">
+                  <h3 className="section-title">Tax Information</h3>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label className="form-label">GST Number</label>
+                      <input
+                        type="text"
+                        value={formData.gstNumber}
+                        onChange={(e) => setFormData({...formData, gstNumber: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter GST number"
+                        maxLength="15"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">PAN Number</label>
+                      <input
+                        type="text"
+                        value={formData.panNumber}
+                        onChange={(e) => setFormData({...formData, panNumber: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter PAN number"
+                        maxLength="10"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address Information Section */}
+                <div className="form-section">
+                  <h3 className="section-title">Address Information</h3>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label className="form-label">
+                        State <span className="required">*</span>
+                      </label>
+                      <select
+                        required
+                        value={formData.state}
+                        onChange={(e) => {
+                          const selectedState = stateOptions.find(s => s.name === e.target.value);
+                          setFormData({
+                            ...formData, 
+                            state: e.target.value,
+                            stateCode: selectedState?.code || ''
+                          });
+                        }}
+                        className="form-select"
+                      >
+                        <option value="">Select State</option>
+                        {stateOptions.map(state => (
+                          <option key={state.code} value={state.name}>
+                            {state.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">City</label>
+                      <input
+                        type="text"
+                        value={formData.city}
+                        onChange={(e) => setFormData({...formData, city: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter city"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Pincode</label>
+                      <input
+                        type="text"
+                        value={formData.pincode}
+                        onChange={(e) => setFormData({...formData, pincode: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter pincode"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Credit Limit</label>
+                      <input
+                        type="number"
+                        value={formData.creditLimit}
+                        onChange={(e) => setFormData({...formData, creditLimit: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter credit limit"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Credit Days</label>
+                      <input
+                        type="number"
+                        value={formData.creditDays}
+                        onChange={(e) => setFormData({...formData, creditDays: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter credit days"
+                        min="0"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Payment Terms</label>
+                      <input
+                        type="text"
+                        value={formData.paymentTerms}
+                        onChange={(e) => setFormData({...formData, paymentTerms: e.target.value})}
+                        className="form-input"
+                        placeholder="Enter payment terms"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Address</label>
+                    <textarea
+                      value={formData.address}
+                      onChange={(e) => setFormData({...formData, address: e.target.value})}
+                      rows="3"
+                      className="form-textarea"
+                      placeholder="Enter complete address"
+                    />
+                  </div>
+                </div>
+
+                {/* Additional Information Section */}
+                <div className="form-section">
+                  <h3 className="section-title">Additional Information</h3>
+                  <div className="form-group">
+                    <label className="form-label">Notes</label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                      rows="3"
+                      className="form-textarea"
+                      placeholder="Enter any additional notes"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setShowEditModal(false);
+                      resetForm();
+                      setError(null);
+                    }}
+                    className="form-button-cancel"
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="form-button-submit"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <div className="loading-spinner-sm"></div>
+                        {selectedParty ? 'Updating...' : 'Creating...'}
+                      </>
+                    ) : (
+                      <>
+                        {selectedParty ? 'Update' : 'Create'} Party
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
@@ -708,7 +788,6 @@ const Parties = () => {
         </div>
       )}
       </div>
-    </div>
 
     <style jsx>{`
       .page {
@@ -721,6 +800,15 @@ const Parties = () => {
         max-width: 1280px;
         margin: 0 auto;
         padding: 0 16px;
+      }
+
+      .header-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e5e7eb;
+        padding: 24px;
+        margin-bottom: 24px;
       }
       
       .page-header {
@@ -874,6 +962,40 @@ const Parties = () => {
         ring: 2px;
         ring-color: #3b82f6;
         border-color: #3b82f6;
+      }
+
+      .error-message {
+        background-color: #fee2e2;
+        border: 1px solid #fecaca;
+        color: #dc2626;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-top: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .error-close {
+        background: none;
+        border: none;
+        color: #dc2626;
+        cursor: pointer;
+        font-size: 20px;
+        font-weight: bold;
+        padding: 0;
+        margin-left: 12px;
+      }
+
+      .loading-spinner-sm {
+        animation: spin 1s linear infinite;
+        border-radius: 50%;
+        height: 16px;
+        width: 16px;
+        border: 2px solid transparent;
+        border-bottom-color: white;
+        margin-right: 8px;
+        display: inline-block;
       }
 
       .table-card {
@@ -1148,6 +1270,12 @@ const Parties = () => {
         border-radius: 12px 12px 0 0;
       }
 
+      .modal-header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
       .modal-title {
         font-size: 20px;
         font-weight: 600;
@@ -1155,18 +1283,45 @@ const Parties = () => {
       }
 
       .modal-body {
-        padding: 24px;
+        padding: 32px;
+      }
+
+      .form-section {
+        margin-bottom: 32px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .form-section:last-of-type {
+        border-bottom: none;
+        margin-bottom: 0;
+      }
+
+      .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+        margin-bottom: 20px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #3b82f6;
+        display: inline-block;
       }
 
       .form-grid {
         display: grid;
         grid-template-columns: 1fr;
-        gap: 16px;
+        gap: 20px;
       }
 
       @media (min-width: 768px) {
         .form-grid {
           grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      @media (min-width: 1024px) {
+        .form-grid {
+          grid-template-columns: 1fr 1fr 1fr;
         }
       }
 
@@ -1180,32 +1335,45 @@ const Parties = () => {
         font-size: 14px;
         font-weight: 500;
         color: #374151;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
+      }
+
+      .required {
+        color: #ef4444;
       }
 
       .form-input, .form-select, .form-textarea {
         width: 100%;
-        padding: 8px 12px;
+        padding: 12px 16px;
         border: 1px solid #d1d5db;
         border-radius: 8px;
         font-size: 14px;
         transition: all 0.2s;
+        background-color: white;
       }
 
       .form-input:focus, .form-select:focus, .form-textarea:focus {
         outline: none;
-        ring: 2px;
-        ring-color: #3b82f6;
-        border-color: transparent;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+
+      .form-input:hover, .form-select:hover, .form-textarea:hover {
+        border-color: #9ca3af;
+      }
+
+      .form-textarea {
+        resize: vertical;
+        min-height: 80px;
       }
 
       .form-actions {
         display: flex;
         justify-content: flex-end;
         gap: 16px;
-        padding-top: 24px;
+        padding-top: 32px;
         border-top: 1px solid #e5e7eb;
-        margin-top: 16px;
+        margin-top: 24px;
       }
 
       .form-button-cancel {
@@ -1216,10 +1384,12 @@ const Parties = () => {
         background: white;
         cursor: pointer;
         transition: all 0.2s;
+        font-weight: 500;
       }
 
       .form-button-cancel:hover {
         background-color: #f9fafb;
+        border-color: #9ca3af;
       }
 
       .form-button-submit {
@@ -1230,10 +1400,13 @@ const Parties = () => {
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s;
+        font-weight: 500;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
       }
 
       .form-button-submit:hover {
         background: linear-gradient(to right, #1d4ed8, #1e40af);
+        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
       }
 
       .view-modal-header {
