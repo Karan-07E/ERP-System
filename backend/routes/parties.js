@@ -6,7 +6,7 @@ const { Op } = require('sequelize');
 
 // Helper function to generate party code
 const generatePartyCode = async (type) => {
-  const prefix = type === 'customer' ? 'C' : type === 'vendor' ? 'V' : 'P';
+  const prefix = type === 'customer' ? 'C' : 'V';
   const count = await Party.count({ where: { type } });
   return `${prefix}${String(count + 1).padStart(5, '0')}`;
 };
@@ -147,6 +147,10 @@ router.post('/', auth, async (req, res) => {
     // Generate party code
     const partyCode = await generatePartyCode(type);
 
+    // Convert empty strings to null for optional fields
+    const cleanGstNumber = gstNumber && gstNumber.trim() !== '' ? gstNumber.trim() : null;
+    const cleanPanNumber = panNumber && panNumber.trim() !== '' ? panNumber.trim() : null;
+
     const party = await Party.create({
       partyCode,
       name,
@@ -160,8 +164,8 @@ router.post('/', auth, async (req, res) => {
       state,
       pincode,
       country,
-      gstNumber,
-      panNumber,
+      gstNumber: cleanGstNumber,
+      panNumber: cleanPanNumber,
       stateCode,
       creditLimit,
       creditDays,

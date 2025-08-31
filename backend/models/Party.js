@@ -17,7 +17,7 @@ const Party = sequelize.define('Party', {
     allowNull: false
   },
   type: {
-    type: DataTypes.ENUM('customer', 'vendor', 'both'),
+    type: DataTypes.ENUM('customer', 'vendor'),
     allowNull: false,
     defaultValue: 'customer'
   },
@@ -57,11 +57,18 @@ const Party = sequelize.define('Party', {
     unique: true,
     allowNull: true,  // Allow null for parties without GST
     validate: {
-      len: [15, 15],
-      isAlphanumeric: true,
-      isValidGST(value) {
-        if (value && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(value)) {
-          throw new Error('Invalid GST number format');
+      isValidGSTFormat(value) {
+        // Only validate if value is provided and not empty
+        if (value && value.trim() !== '') {
+          if (value.length !== 15) {
+            throw new Error('GST number must be exactly 15 characters');
+          }
+          if (!/^[A-Z0-9]+$/.test(value)) {
+            throw new Error('GST number must contain only letters and numbers');
+          }
+          if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(value)) {
+            throw new Error('Invalid GST number format');
+          }
         }
       }
     }
@@ -69,7 +76,17 @@ const Party = sequelize.define('Party', {
   panNumber: {
     type: DataTypes.STRING(10),
     validate: {
-      len: [10, 10]
+      isValidPANFormat(value) {
+        // Only validate if value is provided and not empty
+        if (value && value.trim() !== '') {
+          if (value.length !== 10) {
+            throw new Error('PAN number must be exactly 10 characters');
+          }
+          if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(value)) {
+            throw new Error('Invalid PAN number format');
+          }
+        }
+      }
     }
   },
   stateCode: {
@@ -105,8 +122,7 @@ const Party = sequelize.define('Party', {
     beforeCreate: async (party) => {
       // Generate unique party code if not provided
       if (!party.partyCode) {
-        const prefix = party.type === 'customer' ? 'CUST' : 
-                      party.type === 'vendor' ? 'VEND' : 'PRTY';
+        const prefix = party.type === 'customer' ? 'CUST' : 'VEND';
         
         const latestParty = await Party.findOne({
           where: { type: party.type },

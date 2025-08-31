@@ -38,7 +38,7 @@ const Accounting = () => {
       
       switch (activeTab) {
         case 'parties':
-          const partiesResponse = await axios.get('/api/accounting/parties');
+          const partiesResponse = await axios.get('/api/parties');
           setParties(partiesResponse.data.parties || []);
           break;
         case 'invoices':
@@ -112,20 +112,27 @@ const Accounting = () => {
   const handleDelete = async (item) => {
     if (window.confirm(`Are you sure you want to delete this ${activeTab.slice(0, -1)}?`)) {
       try {
-        // Remove item from state (in real app, would call API)
         if (activeTab === 'parties') {
-          setParties(prev => prev.filter(p => p.id !== item.id));
-        } else if (activeTab === 'invoices') {
-          setInvoices(prev => prev.filter(i => i.id !== item.id));
-        } else if (activeTab === 'quotations') {
-          setQuotations(prev => prev.filter(q => q.id !== item.id));
-        } else if (activeTab === 'payments') {
-          setPayments(prev => prev.filter(p => p.id !== item.id));
+          const response = await axios.delete(`/api/parties/${item.id}`);
+          if (response.data.success) {
+            alert('Party deleted successfully!');
+            await fetchData(); // Refresh the data
+          }
+        } else {
+          // Remove item from state (in real app, would call API)
+          if (activeTab === 'invoices') {
+            setInvoices(prev => prev.filter(i => i.id !== item.id));
+          } else if (activeTab === 'quotations') {
+            setQuotations(prev => prev.filter(q => q.id !== item.id));
+          } else if (activeTab === 'payments') {
+            setPayments(prev => prev.filter(p => p.id !== item.id));
+          }
+          alert(`${activeTab.slice(0, -1)} deleted successfully!`);
         }
-        alert(`${activeTab.slice(0, -1)} deleted successfully!`);
       } catch (error) {
         console.error('Error deleting item:', error);
-        alert('Error deleting item');
+        const errorMessage = error.response?.data?.message || error.message || 'Error deleting item';
+        alert(`Error: ${errorMessage}`);
       }
     }
   };
@@ -135,53 +142,95 @@ const Accounting = () => {
     setSubmitting(true);
 
     try {
-      if (modalType === 'create') {
-        const newItem = {
-          id: `${activeTab.slice(0, 1)}${Date.now()}`,
-          ...formData,
-          createdAt: new Date(),
-          isActive: true
-        };
+      if (activeTab === 'parties') {
+        if (modalType === 'create') {
+          const response = await axios.post('/api/parties', formData);
+          if (response.data.success) {
+            alert('Party created successfully!');
+            setShowModal(false);
+            await fetchData(); // Refresh the data
+            setFormData({});
+          }
+        } else if (modalType === 'edit') {
+          const response = await axios.put(`/api/parties/${selectedItem.id}`, formData);
+          if (response.data.success) {
+            alert('Party updated successfully!');
+            setShowModal(false);
+            await fetchData(); // Refresh the data
+            setFormData({});
+          }
+        }
+      } else {
+        // Enhanced logic for other tabs with better calculations
+        if (modalType === 'create') {
+          const newItem = {
+            id: `${activeTab.slice(0, 1)}${Date.now()}`,
+            ...formData,
+            createdAt: new Date(),
+            isActive: true
+          };
 
-        // Add specific fields based on tab
-        if (activeTab === 'parties') {
-          newItem.creditLimit = formData.creditLimit || 100000;
-          newItem.paymentTerms = formData.paymentTerms || 'Net 30';
-          newItem.type = formData.type || 'customer';
-          setParties(prev => [newItem, ...prev]);
-        } else if (activeTab === 'invoices') {
-          newItem.invoiceNumber = `INV-${Date.now()}`;
-          setInvoices(prev => [newItem, ...prev]);
-        } else if (activeTab === 'quotations') {
-          newItem.quotationNumber = `QUO-${Date.now()}`;
-          setQuotations(prev => [newItem, ...prev]);
-        } else if (activeTab === 'payments') {
-          newItem.paymentNumber = `PAY-${Date.now()}`;
-          setPayments(prev => [newItem, ...prev]);
+          // Add specific fields based on tab
+          if (activeTab === 'invoices') {
+            const taxAmount = (formData.amount * formData.taxRate) / 100;
+            const grandTotal = formData.amount + taxAmount;
+            
+            newItem.invoiceNumber = `INV-${String(invoices.length + 1).padStart(4, '0')}`;
+            newItem.taxAmount = taxAmount;
+            newItem.grandTotal = grandTotal;
+            newItem.status = 'draft';
+            newItem.paymentStatus = 'unpaid';
+            
+            // Find party details
+            const party = parties.find(p => p.id === formData.partyId);
+            newItem.party = party ? { name: party.name, type: party.type } : null;
+            
+            setInvoices(prev => [newItem, ...prev]);
+          } else if (activeTab === 'quotations') {
+            const taxAmount = (formData.amount * formData.taxRate) / 100;
+            const grandTotal = formData.amount + taxAmount;
+            
+            newItem.quotationNumber = `QUO-${String(quotations.length + 1).padStart(4, '0')}`;
+            newItem.taxAmount = taxAmount;
+            newItem.grandTotal = grandTotal;
+            
+            // Find party details
+            const party = parties.find(p => p.id === formData.partyId);
+            newItem.party = party ? { name: party.name, type: party.type } : null;
+            
+            setQuotations(prev => [newItem, ...prev]);
+          } else if (activeTab === 'payments') {
+            newItem.paymentNumber = `PAY-${String(payments.length + 1).padStart(4, '0')}`;
+            
+            // Find party details
+            const party = parties.find(p => p.id === formData.partyId);
+            newItem.party = party ? { name: party.name, type: party.type } : null;
+            
+            setPayments(prev => [newItem, ...prev]);
+          }
+
+          alert(`${activeTab.slice(0, -1)} created successfully!`);
+        } else if (modalType === 'edit') {
+          const updatedItem = { ...selectedItem, ...formData };
+
+          if (activeTab === 'invoices') {
+            setInvoices(prev => prev.map(i => i.id === selectedItem.id ? updatedItem : i));
+          } else if (activeTab === 'quotations') {
+            setQuotations(prev => prev.map(q => q.id === selectedItem.id ? updatedItem : q));
+          } else if (activeTab === 'payments') {
+            setPayments(prev => prev.map(p => p.id === selectedItem.id ? updatedItem : p));
+          }
+
+          alert(`${activeTab.slice(0, -1)} updated successfully!`);
         }
 
-        alert(`${activeTab.slice(0, -1)} created successfully!`);
-      } else if (modalType === 'edit') {
-        const updatedItem = { ...selectedItem, ...formData };
-
-        if (activeTab === 'parties') {
-          setParties(prev => prev.map(p => p.id === selectedItem.id ? updatedItem : p));
-        } else if (activeTab === 'invoices') {
-          setInvoices(prev => prev.map(i => i.id === selectedItem.id ? updatedItem : i));
-        } else if (activeTab === 'quotations') {
-          setQuotations(prev => prev.map(q => q.id === selectedItem.id ? updatedItem : q));
-        } else if (activeTab === 'payments') {
-          setPayments(prev => prev.map(p => p.id === selectedItem.id ? updatedItem : p));
-        }
-
-        alert(`${activeTab.slice(0, -1)} updated successfully!`);
+        setShowModal(false);
+        setFormData({});
       }
-
-      setShowModal(false);
-      setFormData({});
     } catch (error) {
       console.error('Error submitting form:', error);
-      alert('Error submitting form');
+      const errorMessage = error.response?.data?.message || error.message || 'Error submitting form';
+      alert(`Error: ${errorMessage}`);
     } finally {
       setSubmitting(false);
     }
@@ -212,15 +261,22 @@ const Accounting = () => {
       case 'parties':
         return {
           name: '',
-          companyName: '',
+          type: 'customer',
+          contactPerson: '',
           email: '',
           phone: '',
-          address: { street: '', city: '', state: '', zipCode: '' },
+          mobile: '',
+          address: '',
+          city: '',
+          state: '',
+          pincode: '',
           gstNumber: '',
+          panNumber: '',
           stateCode: '',
-          type: 'customer',
-          creditLimit: 100000,
-          paymentTerms: 'Net 30'
+          creditLimit: 0,
+          creditDays: 0,
+          paymentTerms: '',
+          notes: ''
         };
       case 'invoices':
         return {
@@ -228,7 +284,9 @@ const Accounting = () => {
           invoiceDate: new Date().toISOString().split('T')[0],
           dueDate: '',
           placeOfSupply: '',
-          items: [],
+          amount: 0,
+          taxRate: 18,
+          description: '',
           notes: ''
         };
       case 'quotations':
@@ -236,15 +294,22 @@ const Accounting = () => {
           partyId: '',
           quotationDate: new Date().toISOString().split('T')[0],
           validUntil: '',
-          items: [],
+          status: 'draft',
+          amount: 0,
+          taxRate: 18,
+          description: '',
+          terms: '',
           notes: ''
         };
       case 'payments':
         return {
           partyId: '',
+          type: 'payment_in',
           amount: 0,
           paymentDate: new Date().toISOString().split('T')[0],
           paymentMode: 'cash',
+          referenceNumber: '',
+          description: '',
           notes: ''
         };
       case 'items':
@@ -470,6 +535,17 @@ const Accounting = () => {
             <table className="data-table">
               <thead>
                 <tr>
+                  {activeTab === 'parties' && (
+                    <>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Contact</th>
+                      <th>GST Number</th>
+                      <th>Credit Limit</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </>
+                  )}
                   {activeTab === 'customers' && (
                     <>
                       <th>Name</th>
@@ -529,7 +605,7 @@ const Accounting = () => {
                       <th>Amount</th>
                       <th>Method</th>
                       <th>Date</th>
-                      <th>Description</th>
+                      <th>Party</th>
                       <th>Actions</th>
                     </>
                   )}
@@ -537,7 +613,39 @@ const Accounting = () => {
               </thead>
               <tbody>
                 {filteredData.map(item => (
-                  <tr key={item._id}>
+                  <tr key={item.id || item._id}>
+                    {activeTab === 'parties' && (
+                      <>
+                        <td className="font-medium">{item.name}</td>
+                        <td>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            item.type === 'customer' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                          }`}>
+                            {item.type?.toUpperCase()}
+                          </span>
+                        </td>
+                        <td>
+                          <div>{item.email}</div>
+                          <div className="text-sm text-gray-500">{item.phone}</div>
+                        </td>
+                        <td>{item.gstNumber || 'N/A'}</td>
+                        <td>₹{item.creditLimit?.toLocaleString()}</td>
+                        <td>{getStatusBadge(item.isActive ? 'active' : 'inactive')}</td>
+                        <td>
+                          <div className="action-buttons">
+                            <button onClick={() => handleView(item)} className="btn-icon">
+                              <Eye size={16} />
+                            </button>
+                            <button onClick={() => handleEdit(item)} className="btn-icon">
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(item)} className="btn-icon btn-danger">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
                     {activeTab === 'customers' && (
                       <>
                         <td className="font-medium">{item.name}</td>
@@ -614,15 +722,21 @@ const Accounting = () => {
                     {activeTab === 'invoices' && (
                       <>
                         <td className="font-medium">{item.invoiceNumber}</td>
-                        <td>{item.customer?.name}</td>
+                        <td>{item.party?.name || 'N/A'}</td>
                         <td>₹{item.grandTotal?.toLocaleString()}</td>
                         <td>{getStatusBadge(item.status)}</td>
                         <td>{getStatusBadge(item.paymentStatus)}</td>
-                        <td>{item.dueDate?.toLocaleDateString()}</td>
+                        <td>{new Date(item.dueDate).toLocaleDateString()}</td>
                         <td>
                           <div className="action-buttons">
                             <button onClick={() => handleView(item)} className="btn-icon">
                               <Eye size={16} />
+                            </button>
+                            <button onClick={() => handleEdit(item)} className="btn-icon">
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(item)} className="btn-icon btn-danger">
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </td>
@@ -631,14 +745,20 @@ const Accounting = () => {
                     {activeTab === 'quotations' && (
                       <>
                         <td className="font-medium">{item.quotationNumber}</td>
-                        <td>{item.customer?.name}</td>
+                        <td>{item.party?.name || 'N/A'}</td>
                         <td>₹{item.grandTotal?.toLocaleString()}</td>
-                        <td>{item.validUntil?.toLocaleDateString()}</td>
+                        <td>{new Date(item.validUntil).toLocaleDateString()}</td>
                         <td>{getStatusBadge(item.status)}</td>
                         <td>
                           <div className="action-buttons">
                             <button onClick={() => handleView(item)} className="btn-icon">
                               <Eye size={16} />
+                            </button>
+                            <button onClick={() => handleEdit(item)} className="btn-icon">
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(item)} className="btn-icon btn-danger">
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </td>
@@ -649,13 +769,19 @@ const Accounting = () => {
                         <td className="font-medium">{item.paymentNumber}</td>
                         <td>{getStatusBadge(item.type)}</td>
                         <td>₹{item.amount?.toLocaleString()}</td>
-                        <td>{item.paymentMethod?.replace('_', ' ')}</td>
-                        <td>{item.paymentDate?.toLocaleDateString()}</td>
-                        <td>{item.description}</td>
+                        <td>{item.paymentMode?.replace('_', ' ')}</td>
+                        <td>{new Date(item.paymentDate).toLocaleDateString()}</td>
+                        <td>{item.party?.name || 'N/A'}</td>
                         <td>
                           <div className="action-buttons">
                             <button onClick={() => handleView(item)} className="btn-icon">
                               <Eye size={16} />
+                            </button>
+                            <button onClick={() => handleEdit(item)} className="btn-icon">
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(item)} className="btn-icon btn-danger">
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </td>
@@ -688,33 +814,162 @@ const Accounting = () => {
               <div className="modal-body">
                 {selectedItem && (
                   <div className="view-details">
-                    {(activeTab === 'customers' || activeTab === 'vendors') && (
+                    {(activeTab === 'parties' || activeTab === 'customers' || activeTab === 'vendors') && (
                       <>
                         <div className="detail-section">
                           <h4>Basic Information</h4>
                           <div className="detail-grid">
                             <div><strong>Name:</strong> {selectedItem.name}</div>
-                            <div><strong>Company:</strong> {selectedItem.companyName}</div>
+                            {activeTab === 'parties' && (
+                              <>
+                                <div><strong>Type:</strong> {selectedItem.type?.toUpperCase()}</div>
+                                <div><strong>Contact Person:</strong> {selectedItem.contactPerson || 'N/A'}</div>
+                              </>
+                            )}
+                            {(activeTab === 'customers' || activeTab === 'vendors') && (
+                              <div><strong>Company:</strong> {selectedItem.companyName}</div>
+                            )}
                             <div><strong>Email:</strong> {selectedItem.email}</div>
                             <div><strong>Phone:</strong> {selectedItem.phone}</div>
+                            {activeTab === 'parties' && selectedItem.mobile && (
+                              <div><strong>Mobile:</strong> {selectedItem.mobile}</div>
+                            )}
                             <div><strong>GST Number:</strong> {selectedItem.gstNumber || 'N/A'}</div>
+                            {activeTab === 'parties' && (
+                              <>
+                                <div><strong>PAN Number:</strong> {selectedItem.panNumber || 'N/A'}</div>
+                                <div><strong>State Code:</strong> {selectedItem.stateCode || 'N/A'}</div>
+                              </>
+                            )}
                             <div><strong>Payment Terms:</strong> {selectedItem.paymentTerms}</div>
-                            {activeTab === 'customers' && (
-                              <div><strong>Credit Limit:</strong> ₹{selectedItem.creditLimit?.toLocaleString()}</div>
+                            <div><strong>Credit Limit:</strong> ₹{selectedItem.creditLimit?.toLocaleString()}</div>
+                            {activeTab === 'parties' && (
+                              <div><strong>Credit Days:</strong> {selectedItem.creditDays || 0} days</div>
                             )}
                           </div>
                         </div>
                         
-                        {selectedItem.address && (
+                        <div className="detail-section">
+                          <h4>Address</h4>
+                          <div className="address-display">
+                            {activeTab === 'parties' ? (
+                              <>
+                                {selectedItem.address && <>{selectedItem.address}<br/></>}
+                                {selectedItem.city && <>{selectedItem.city}</>}
+                                {selectedItem.state && <>, {selectedItem.state}</>}
+                                {selectedItem.pincode && <> - {selectedItem.pincode}</>}
+                              </>
+                            ) : selectedItem.address ? (
+                              <>
+                                {selectedItem.address.street}<br/>
+                                {selectedItem.address.city}, {selectedItem.address.state} {selectedItem.address.zipCode}
+                              </>
+                            ) : (
+                              'No address provided'
+                            )}
+                          </div>
+                        </div>
+
+                        {activeTab === 'parties' && selectedItem.notes && (
                           <div className="detail-section">
-                            <h4>Address</h4>
-                            <div className="address-display">
-                              {selectedItem.address.street}<br/>
-                              {selectedItem.address.city}, {selectedItem.address.state} {selectedItem.address.zipCode}
-                            </div>
+                            <h4>Notes</h4>
+                            <div>{selectedItem.notes}</div>
                           </div>
                         )}
                       </>
+                    )}
+
+                    {activeTab === 'invoices' && (
+                      <div className="detail-section">
+                        <h4>Invoice Information</h4>
+                        <div className="detail-grid">
+                          <div><strong>Invoice Number:</strong> {selectedItem.invoiceNumber}</div>
+                          <div><strong>Party:</strong> {selectedItem.party?.name || 'N/A'}</div>
+                          <div><strong>Invoice Date:</strong> {new Date(selectedItem.invoiceDate).toLocaleDateString()}</div>
+                          <div><strong>Due Date:</strong> {new Date(selectedItem.dueDate).toLocaleDateString()}</div>
+                          <div><strong>Place of Supply:</strong> {selectedItem.placeOfSupply}</div>
+                          <div><strong>Amount:</strong> ₹{selectedItem.amount?.toLocaleString()}</div>
+                          <div><strong>Tax Rate:</strong> {selectedItem.taxRate}%</div>
+                          <div><strong>Tax Amount:</strong> ₹{selectedItem.taxAmount?.toLocaleString()}</div>
+                          <div><strong>Grand Total:</strong> ₹{selectedItem.grandTotal?.toLocaleString()}</div>
+                          <div><strong>Status:</strong> {selectedItem.status?.toUpperCase()}</div>
+                          <div><strong>Payment Status:</strong> {selectedItem.paymentStatus?.toUpperCase()}</div>
+                        </div>
+                        {selectedItem.description && (
+                          <div style={{marginTop: '16px'}}>
+                            <strong>Description:</strong><br/>
+                            {selectedItem.description}
+                          </div>
+                        )}
+                        {selectedItem.notes && (
+                          <div style={{marginTop: '16px'}}>
+                            <strong>Notes:</strong><br/>
+                            {selectedItem.notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {activeTab === 'quotations' && (
+                      <div className="detail-section">
+                        <h4>Quotation Information</h4>
+                        <div className="detail-grid">
+                          <div><strong>Quotation Number:</strong> {selectedItem.quotationNumber}</div>
+                          <div><strong>Party:</strong> {selectedItem.party?.name || 'N/A'}</div>
+                          <div><strong>Quotation Date:</strong> {new Date(selectedItem.quotationDate).toLocaleDateString()}</div>
+                          <div><strong>Valid Until:</strong> {new Date(selectedItem.validUntil).toLocaleDateString()}</div>
+                          <div><strong>Status:</strong> {selectedItem.status?.toUpperCase()}</div>
+                          <div><strong>Amount:</strong> ₹{selectedItem.amount?.toLocaleString()}</div>
+                          <div><strong>Tax Rate:</strong> {selectedItem.taxRate}%</div>
+                          <div><strong>Tax Amount:</strong> ₹{selectedItem.taxAmount?.toLocaleString()}</div>
+                          <div><strong>Grand Total:</strong> ₹{selectedItem.grandTotal?.toLocaleString()}</div>
+                        </div>
+                        {selectedItem.description && (
+                          <div style={{marginTop: '16px'}}>
+                            <strong>Description:</strong><br/>
+                            {selectedItem.description}
+                          </div>
+                        )}
+                        {selectedItem.terms && (
+                          <div style={{marginTop: '16px'}}>
+                            <strong>Terms & Conditions:</strong><br/>
+                            {selectedItem.terms}
+                          </div>
+                        )}
+                        {selectedItem.notes && (
+                          <div style={{marginTop: '16px'}}>
+                            <strong>Notes:</strong><br/>
+                            {selectedItem.notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {activeTab === 'payments' && (
+                      <div className="detail-section">
+                        <h4>Payment Information</h4>
+                        <div className="detail-grid">
+                          <div><strong>Payment Number:</strong> {selectedItem.paymentNumber}</div>
+                          <div><strong>Party:</strong> {selectedItem.party?.name || 'N/A'}</div>
+                          <div><strong>Type:</strong> {selectedItem.type?.replace('_', ' ').toUpperCase()}</div>
+                          <div><strong>Amount:</strong> ₹{selectedItem.amount?.toLocaleString()}</div>
+                          <div><strong>Payment Date:</strong> {new Date(selectedItem.paymentDate).toLocaleDateString()}</div>
+                          <div><strong>Payment Mode:</strong> {selectedItem.paymentMode?.replace('_', ' ').toUpperCase()}</div>
+                          <div><strong>Reference Number:</strong> {selectedItem.referenceNumber || 'N/A'}</div>
+                        </div>
+                        {selectedItem.description && (
+                          <div style={{marginTop: '16px'}}>
+                            <strong>Description:</strong><br/>
+                            {selectedItem.description}
+                          </div>
+                        )}
+                        {selectedItem.notes && (
+                          <div style={{marginTop: '16px'}}>
+                            <strong>Notes:</strong><br/>
+                            {selectedItem.notes}
+                          </div>
+                        )}
+                      </div>
                     )}
                     
                     {activeTab === 'items' && (
@@ -745,7 +1000,7 @@ const Accounting = () => {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="modal-body">
-                {(activeTab === 'customers' || activeTab === 'vendors') && (
+                {(activeTab === 'parties' || activeTab === 'customers' || activeTab === 'vendors') && (
                   <>
                     <div className="form-row">
                       <div className="form-group">
@@ -759,17 +1014,29 @@ const Accounting = () => {
                         />
                       </div>
                       <div className="form-group">
-                        <label>Company Name</label>
-                        <input
-                          type="text"
-                          name="companyName"
-                          value={formData.companyName || ''}
+                        <label>Type *</label>
+                        <select
+                          name="type"
+                          value={formData.type || 'customer'}
                           onChange={handleInputChange}
-                        />
+                          required
+                        >
+                          <option value="customer">Customer</option>
+                          <option value="vendor">Vendor</option>
+                        </select>
                       </div>
                     </div>
 
                     <div className="form-row">
+                      <div className="form-group">
+                        <label>Contact Person</label>
+                        <input
+                          type="text"
+                          name="contactPerson"
+                          value={formData.contactPerson || ''}
+                          onChange={handleInputChange}
+                        />
+                      </div>
                       <div className="form-group">
                         <label>Email *</label>
                         <input
@@ -780,6 +1047,9 @@ const Accounting = () => {
                           required
                         />
                       </div>
+                    </div>
+
+                    <div className="form-row">
                       <div className="form-group">
                         <label>Phone *</label>
                         <input
@@ -790,44 +1060,56 @@ const Accounting = () => {
                           required
                         />
                       </div>
+                      <div className="form-group">
+                        <label>Mobile</label>
+                        <input
+                          type="tel"
+                          name="mobile"
+                          value={formData.mobile || ''}
+                          onChange={handleInputChange}
+                        />
+                      </div>
                     </div>
 
                     <div className="form-group">
                       <label>Address</label>
                       <input
                         type="text"
-                        name="address.street"
+                        name="address"
                         placeholder="Street Address"
-                        value={formData.address?.street || ''}
+                        value={formData.address || ''}
                         onChange={handleInputChange}
                       />
                     </div>
 
                     <div className="form-row">
                       <div className="form-group">
+                        <label>City</label>
                         <input
                           type="text"
-                          name="address.city"
+                          name="city"
                           placeholder="City"
-                          value={formData.address?.city || ''}
+                          value={formData.city || ''}
                           onChange={handleInputChange}
                         />
                       </div>
                       <div className="form-group">
+                        <label>State</label>
                         <input
                           type="text"
-                          name="address.state"
+                          name="state"
                           placeholder="State"
-                          value={formData.address?.state || ''}
+                          value={formData.state || ''}
                           onChange={handleInputChange}
                         />
                       </div>
                       <div className="form-group">
+                        <label>Pincode</label>
                         <input
                           type="text"
-                          name="address.zipCode"
-                          placeholder="ZIP Code"
-                          value={formData.address?.zipCode || ''}
+                          name="pincode"
+                          placeholder="Pincode"
+                          value={formData.pincode || ''}
                           onChange={handleInputChange}
                         />
                       </div>
@@ -844,12 +1126,34 @@ const Accounting = () => {
                         />
                       </div>
                       <div className="form-group">
+                        <label>PAN Number</label>
+                        <input
+                          type="text"
+                          name="panNumber"
+                          value={formData.panNumber || ''}
+                          onChange={handleInputChange}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>State Code</label>
+                        <input
+                          type="text"
+                          name="stateCode"
+                          value={formData.stateCode || ''}
+                          onChange={handleInputChange}
+                        />
+                      </div>
+                      <div className="form-group">
                         <label>Payment Terms</label>
                         <select
                           name="paymentTerms"
-                          value={formData.paymentTerms || 'Net 30'}
+                          value={formData.paymentTerms || ''}
                           onChange={handleInputChange}
                         >
+                          <option value="">Select Terms</option>
                           <option value="Net 15">Net 15</option>
                           <option value="Net 30">Net 30</option>
                           <option value="Net 45">Net 45</option>
@@ -860,18 +1164,375 @@ const Accounting = () => {
                       </div>
                     </div>
 
-                    {activeTab === 'customers' && (
+                    <div className="form-row">
                       <div className="form-group">
                         <label>Credit Limit</label>
                         <input
                           type="number"
                           name="creditLimit"
-                          value={formData.creditLimit || 100000}
+                          value={formData.creditLimit || 0}
                           onChange={handleInputChange}
                           min="0"
                         />
                       </div>
-                    )}
+                      <div className="form-group">
+                        <label>Credit Days</label>
+                        <input
+                          type="number"
+                          name="creditDays"
+                          value={formData.creditDays || 0}
+                          onChange={handleInputChange}
+                          min="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Notes</label>
+                      <textarea
+                        name="notes"
+                        value={formData.notes || ''}
+                        onChange={handleInputChange}
+                        rows="3"
+                        placeholder="Additional notes..."
+                      />
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'invoices' && (
+                  <>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Party *</label>
+                        <select
+                          name="partyId"
+                          value={formData.partyId || ''}
+                          onChange={handleInputChange}
+                          required
+                        >
+                          <option value="">Select Party</option>
+                          {parties.filter(p => p.type === 'customer').map(party => (
+                            <option key={party.id} value={party.id}>{party.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Invoice Date *</label>
+                        <input
+                          type="date"
+                          name="invoiceDate"
+                          value={formData.invoiceDate || new Date().toISOString().split('T')[0]}
+                          onChange={handleInputChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Due Date *</label>
+                        <input
+                          type="date"
+                          name="dueDate"
+                          value={formData.dueDate || ''}
+                          onChange={handleInputChange}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Place of Supply *</label>
+                        <input
+                          type="text"
+                          name="placeOfSupply"
+                          value={formData.placeOfSupply || ''}
+                          onChange={handleInputChange}
+                          placeholder="e.g., Maharashtra"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Amount *</label>
+                        <input
+                          type="number"
+                          name="amount"
+                          value={formData.amount || 0}
+                          onChange={handleInputChange}
+                          min="0"
+                          step="0.01"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Tax Rate (%)</label>
+                        <select
+                          name="taxRate"
+                          value={formData.taxRate || 18}
+                          onChange={handleInputChange}
+                        >
+                          <option value={0}>0%</option>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
+                          <option value={18}>18%</option>
+                          <option value={28}>28%</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Description</label>
+                      <textarea
+                        name="description"
+                        value={formData.description || ''}
+                        onChange={handleInputChange}
+                        rows="3"
+                        placeholder="Invoice description..."
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Notes</label>
+                      <textarea
+                        name="notes"
+                        value={formData.notes || ''}
+                        onChange={handleInputChange}
+                        rows="2"
+                        placeholder="Additional notes..."
+                      />
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'quotations' && (
+                  <>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Party *</label>
+                        <select
+                          name="partyId"
+                          value={formData.partyId || ''}
+                          onChange={handleInputChange}
+                          required
+                        >
+                          <option value="">Select Party</option>
+                          {parties.filter(p => p.type === 'customer').map(party => (
+                            <option key={party.id} value={party.id}>{party.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Quotation Date *</label>
+                        <input
+                          type="date"
+                          name="quotationDate"
+                          value={formData.quotationDate || new Date().toISOString().split('T')[0]}
+                          onChange={handleInputChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Valid Until *</label>
+                        <input
+                          type="date"
+                          name="validUntil"
+                          value={formData.validUntil || ''}
+                          onChange={handleInputChange}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Status</label>
+                        <select
+                          name="status"
+                          value={formData.status || 'draft'}
+                          onChange={handleInputChange}
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="sent">Sent</option>
+                          <option value="accepted">Accepted</option>
+                          <option value="rejected">Rejected</option>
+                          <option value="expired">Expired</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Amount *</label>
+                        <input
+                          type="number"
+                          name="amount"
+                          value={formData.amount || 0}
+                          onChange={handleInputChange}
+                          min="0"
+                          step="0.01"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Tax Rate (%)</label>
+                        <select
+                          name="taxRate"
+                          value={formData.taxRate || 18}
+                          onChange={handleInputChange}
+                        >
+                          <option value={0}>0%</option>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
+                          <option value={18}>18%</option>
+                          <option value={28}>28%</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Description</label>
+                      <textarea
+                        name="description"
+                        value={formData.description || ''}
+                        onChange={handleInputChange}
+                        rows="3"
+                        placeholder="Quotation description..."
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Terms & Conditions</label>
+                      <textarea
+                        name="terms"
+                        value={formData.terms || ''}
+                        onChange={handleInputChange}
+                        rows="3"
+                        placeholder="Terms and conditions..."
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Notes</label>
+                      <textarea
+                        name="notes"
+                        value={formData.notes || ''}
+                        onChange={handleInputChange}
+                        rows="2"
+                        placeholder="Additional notes..."
+                      />
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'payments' && (
+                  <>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Party *</label>
+                        <select
+                          name="partyId"
+                          value={formData.partyId || ''}
+                          onChange={handleInputChange}
+                          required
+                        >
+                          <option value="">Select Party</option>
+                          {parties.map(party => (
+                            <option key={party.id} value={party.id}>{party.name} ({party.type})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Payment Type *</label>
+                        <select
+                          name="type"
+                          value={formData.type || 'payment_in'}
+                          onChange={handleInputChange}
+                          required
+                        >
+                          <option value="payment_in">Payment In (Received)</option>
+                          <option value="payment_out">Payment Out (Made)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Amount *</label>
+                        <input
+                          type="number"
+                          name="amount"
+                          value={formData.amount || 0}
+                          onChange={handleInputChange}
+                          min="0"
+                          step="0.01"
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Payment Date *</label>
+                        <input
+                          type="date"
+                          name="paymentDate"
+                          value={formData.paymentDate || new Date().toISOString().split('T')[0]}
+                          onChange={handleInputChange}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label>Payment Mode *</label>
+                        <select
+                          name="paymentMode"
+                          value={formData.paymentMode || 'cash'}
+                          onChange={handleInputChange}
+                          required
+                        >
+                          <option value="cash">Cash</option>
+                          <option value="bank_transfer">Bank Transfer</option>
+                          <option value="cheque">Cheque</option>
+                          <option value="upi">UPI</option>
+                          <option value="credit_card">Credit Card</option>
+                          <option value="debit_card">Debit Card</option>
+                          <option value="online">Online Payment</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Reference Number</label>
+                        <input
+                          type="text"
+                          name="referenceNumber"
+                          value={formData.referenceNumber || ''}
+                          onChange={handleInputChange}
+                          placeholder="Transaction/Cheque No."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Description</label>
+                      <textarea
+                        name="description"
+                        value={formData.description || ''}
+                        onChange={handleInputChange}
+                        rows="3"
+                        placeholder="Payment description..."
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Notes</label>
+                      <textarea
+                        name="notes"
+                        value={formData.notes || ''}
+                        onChange={handleInputChange}
+                        rows="2"
+                        placeholder="Additional notes..."
+                      />
+                    </div>
                   </>
                 )}
 

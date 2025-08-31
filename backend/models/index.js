@@ -84,14 +84,8 @@ Message.belongsTo(Conversation, { foreignKey: 'conversation', as: 'conversationD
 User.hasMany(Notification, { foreignKey: 'user', as: 'notifications' });
 Notification.belongsTo(User, { foreignKey: 'user', as: 'userData' });
 
-// Sync all models
-sequelize.sync({ force: false })
-  .then(() => {
-    console.log('All models were synchronized successfully.');
-  })
-  .catch(err => {
-    console.error('Error synchronizing models:', err);
-  });
+// Note: Database synchronization is handled separately via migration scripts
+// Models are ready to use without automatic sync
 
 module.exports = {
   sequelize,

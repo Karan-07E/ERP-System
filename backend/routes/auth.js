@@ -85,7 +85,7 @@ router.post('/register', validate(userSchemas.register), async (req, res) => {
       password,
       firstName,
       lastName,
-      role: role || 'production',
+      roles: [role || 'production'],
       permissions,
       phone,
       address

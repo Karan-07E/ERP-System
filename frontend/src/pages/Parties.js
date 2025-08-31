@@ -15,6 +15,7 @@ const Parties = () => {
   const [parties, setParties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -45,6 +46,166 @@ const Parties = () => {
     paymentTerms: '',
     notes: ''
   });
+
+  // Validation errors state
+  const [validationErrors, setValidationErrors] = useState({});
+
+  // Validation functions
+  const validateField = (name, value) => {
+    const errors = {};
+
+    switch (name) {
+      case 'name':
+        if (!value.trim()) {
+          errors.name = 'Party name is required';
+        } else if (value.length < 2) {
+          errors.name = 'Party name must be at least 2 characters';
+        }
+        break;
+
+      case 'email':
+        if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          errors.email = 'Please enter a valid email address';
+        }
+        break;
+
+      case 'phone':
+        if (!value.trim()) {
+          errors.phone = 'Phone number is required';
+        } else if (!/^[+]?[\d\s\-()]{10,15}$/.test(value)) {
+          errors.phone = 'Please enter a valid phone number (10-15 digits)';
+        }
+        break;
+
+      case 'mobile':
+        if (value && !/^[+]?[\d\s\-()]{10,15}$/.test(value)) {
+          errors.mobile = 'Please enter a valid mobile number (10-15 digits)';
+        }
+        break;
+
+      case 'address':
+        if (!value.trim()) {
+          errors.address = 'Address is required';
+        }
+        break;
+
+      case 'city':
+        if (!value.trim()) {
+          errors.city = 'City is required';
+        }
+        break;
+
+      case 'state':
+        if (!value.trim()) {
+          errors.state = 'State is required';
+        }
+        break;
+
+      case 'pincode':
+        if (!value.trim()) {
+          errors.pincode = 'Pincode is required';
+        } else if (!/^\d{6}$/.test(value)) {
+          errors.pincode = 'Pincode must be exactly 6 digits';
+        }
+        break;
+
+      case 'gstNumber':
+        if (value && value.length !== 15) {
+          errors.gstNumber = 'GST number must be exactly 15 characters';
+        } else if (value && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(value)) {
+          errors.gstNumber = 'Please enter a valid GST number format';
+        }
+        break;
+
+      case 'panNumber':
+        if (value && value.length !== 10) {
+          errors.panNumber = 'PAN number must be exactly 10 characters';
+        } else if (value && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(value)) {
+          errors.panNumber = 'Please enter a valid PAN number format (e.g., ABCDE1234F)';
+        }
+        break;
+
+      case 'creditLimit':
+        if (value !== '' && (isNaN(value) || value < 0)) {
+          errors.creditLimit = 'Credit limit cannot be negative';
+        }
+        break;
+
+      case 'creditDays':
+        if (value !== '' && (isNaN(value) || value < 0)) {
+          errors.creditDays = 'Credit days cannot be negative';
+        } else if (value !== '' && value > 365) {
+          errors.creditDays = 'Credit days cannot exceed 365 days';
+        }
+        break;
+
+      default:
+        break;
+    }
+
+    return errors;
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    
+    // Only validate required fields for form submission
+    const requiredFields = ['name', 'phone', 'address', 'city', 'state', 'pincode'];
+    
+    requiredFields.forEach(key => {
+      const fieldErrors = validateField(key, formData[key]);
+      Object.assign(errors, fieldErrors);
+    });
+    
+    // Also validate optional fields if they have values
+    const optionalFields = ['email', 'mobile', 'gstNumber', 'panNumber', 'creditLimit', 'creditDays'];
+    optionalFields.forEach(key => {
+      if (formData[key] && formData[key] !== '') {
+        const fieldErrors = validateField(key, formData[key]);
+        Object.assign(errors, fieldErrors);
+      }
+    });
+
+    console.log('Form validation errors:', errors);
+    console.log('Form data being validated:', formData);
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleInputChange = (name, value) => {
+    // Update form data
+    if (name === 'state') {
+      // Special handling for state to also set stateCode
+      const selectedState = stateOptions.find(s => s.name === value);
+      setFormData(prev => ({
+        ...prev,
+        state: value,
+        stateCode: selectedState?.code || ''
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+
+    // Clear validation error for this field when user starts typing
+    if (validationErrors[name]) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+
+    // Validate field on blur or for critical fields
+    const fieldErrors = validateField(name, value);
+    if (Object.keys(fieldErrors).length > 0) {
+      setValidationErrors(prev => ({
+        ...prev,
+        ...fieldErrors
+      }));
+    }
+  };
 
   const stateOptions = [
     { code: '01', name: 'Jammu and Kashmir' },
@@ -82,9 +243,17 @@ const Parties = () => {
     { code: '33', name: 'Tamil Nadu' },
     { code: '34', name: 'Puducherry' },
     { code: '35', name: 'Andaman and Nicobar Islands' },
-    { code: '36', name: 'Telangana' },
-    { code: '37', name: 'Andhra Pradesh (New)' }
+    { code: '36', name: 'Telangana' }
   ];
+
+  // Debounce search term to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   useEffect(() => {
     // Check if user is authenticated
@@ -96,7 +265,14 @@ const Parties = () => {
     }
     
     fetchParties();
-  }, [currentPage, searchTerm, filterType]);
+  }, [currentPage, debouncedSearchTerm, filterType]);
+
+  // Ensure selectedParty is null when opening add modal
+  useEffect(() => {
+    if (showAddModal) {
+      setSelectedParty(null);
+    }
+  }, [showAddModal]);
 
   const fetchParties = async () => {
     try {
@@ -106,7 +282,8 @@ const Parties = () => {
       const params = new URLSearchParams({
         page: currentPage,
         limit: 20,
-        ...(searchTerm && { search: searchTerm }),
+        isActive: 'true', // Only fetch active parties
+        ...(debouncedSearchTerm && { search: debouncedSearchTerm }),
         ...(filterType !== 'all' && { type: filterType })
       });
 
@@ -133,6 +310,13 @@ const Parties = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate form before submission
+    if (!validateForm()) {
+      setError('Please correct the errors below');
+      return;
+    }
+    
     setSubmitting(true);
     setError(null);
     
@@ -218,6 +402,7 @@ const Parties = () => {
       paymentTerms: '',
       notes: ''
     });
+    setValidationErrors({}); // Clear validation errors
     setSelectedParty(null);
     setError(null);
     setSubmitting(false);
@@ -227,7 +412,6 @@ const Parties = () => {
     switch (type) {
       case 'customer': return 'bg-blue-100 text-blue-800';
       case 'vendor': return 'bg-green-100 text-green-800';
-      case 'both': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -260,7 +444,11 @@ const Parties = () => {
                 <p className="header-subtitle">Manage customers, vendors, and business partners</p>
               </div>
               <button
-                onClick={() => setShowAddModal(true)}
+                onClick={() => {
+                  setSelectedParty(null);
+                  resetForm();
+                  setShowAddModal(true);
+                }}
                 className="add-button"
               >
                 <Plus size={20} />
@@ -293,7 +481,6 @@ const Parties = () => {
                   <option value="all">All Types</option>
                   <option value="customer">Customers</option>
                   <option value="vendor">Vendors</option>
-                  <option value="both">Both</option>
                 </select>
               </div>
             </div>
@@ -313,7 +500,11 @@ const Parties = () => {
               <h3 className="empty-title">No parties found</h3>
               <p className="empty-description">Add your first party to get started.</p>
               <button
-                onClick={() => setShowAddModal(true)}
+                onClick={() => {
+                  setSelectedParty(null);
+                  resetForm();
+                  setShowAddModal(true);
+                }}
                 className="add-button"
               >
                 <Plus size={20} />
@@ -462,10 +653,13 @@ const Parties = () => {
                         type="text"
                         required
                         value={formData.name}
-                        onChange={(e) => setFormData({...formData, name: e.target.value})}
-                        className="form-input"
+                        onChange={(e) => handleInputChange('name', e.target.value)}
+                        className={`form-input ${validationErrors.name ? 'error' : ''}`}
                         placeholder="Enter party name"
                       />
+                      {validationErrors.name && (
+                        <span className="error-message">{validationErrors.name}</span>
+                      )}
                     </div>
                     
                     <div className="form-group">
@@ -480,7 +674,6 @@ const Parties = () => {
                       >
                         <option value="customer">Customer</option>
                         <option value="vendor">Vendor</option>
-                        <option value="both">Both</option>
                       </select>
                     </div>
 
@@ -500,21 +693,30 @@ const Parties = () => {
                       <input
                         type="email"
                         value={formData.email}
-                        onChange={(e) => setFormData({...formData, email: e.target.value})}
-                        className="form-input"
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                        className={`form-input ${validationErrors.email ? 'error' : ''}`}
                         placeholder="Enter email address"
                       />
+                      {validationErrors.email && (
+                        <span className="error-message">{validationErrors.email}</span>
+                      )}
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">Phone</label>
+                      <label className="form-label">
+                        Phone <span className="required">*</span>
+                      </label>
                       <input
                         type="tel"
+                        required
                         value={formData.phone}
-                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                        className="form-input"
+                        onChange={(e) => handleInputChange('phone', e.target.value)}
+                        className={`form-input ${validationErrors.phone ? 'error' : ''}`}
                         placeholder="Enter phone number"
                       />
+                      {validationErrors.phone && (
+                        <span className="error-message">{validationErrors.phone}</span>
+                      )}
                     </div>
 
                     <div className="form-group">
@@ -522,10 +724,13 @@ const Parties = () => {
                       <input
                         type="tel"
                         value={formData.mobile}
-                        onChange={(e) => setFormData({...formData, mobile: e.target.value})}
-                        className="form-input"
+                        onChange={(e) => handleInputChange('mobile', e.target.value)}
+                        className={`form-input ${validationErrors.mobile ? 'error' : ''}`}
                         placeholder="Enter mobile number"
                       />
+                      {validationErrors.mobile && (
+                        <span className="error-message">{validationErrors.mobile}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -539,11 +744,14 @@ const Parties = () => {
                       <input
                         type="text"
                         value={formData.gstNumber}
-                        onChange={(e) => setFormData({...formData, gstNumber: e.target.value})}
-                        className="form-input"
-                        placeholder="Enter GST number"
+                        onChange={(e) => handleInputChange('gstNumber', e.target.value.toUpperCase())}
+                        className={`form-input ${validationErrors.gstNumber ? 'error' : ''}`}
+                        placeholder="Enter GST number (15 characters)"
                         maxLength="15"
                       />
+                      {validationErrors.gstNumber && (
+                        <span className="error-message">{validationErrors.gstNumber}</span>
+                      )}
                     </div>
 
                     <div className="form-group">
@@ -551,11 +759,14 @@ const Parties = () => {
                       <input
                         type="text"
                         value={formData.panNumber}
-                        onChange={(e) => setFormData({...formData, panNumber: e.target.value})}
-                        className="form-input"
-                        placeholder="Enter PAN number"
+                        onChange={(e) => handleInputChange('panNumber', e.target.value.toUpperCase())}
+                        className={`form-input ${validationErrors.panNumber ? 'error' : ''}`}
+                        placeholder="Enter PAN number (10 characters)"
                         maxLength="10"
                       />
+                      {validationErrors.panNumber && (
+                        <span className="error-message">{validationErrors.panNumber}</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -572,14 +783,9 @@ const Parties = () => {
                         required
                         value={formData.state}
                         onChange={(e) => {
-                          const selectedState = stateOptions.find(s => s.name === e.target.value);
-                          setFormData({
-                            ...formData, 
-                            state: e.target.value,
-                            stateCode: selectedState?.code || ''
-                          });
+                          handleInputChange('state', e.target.value);
                         }}
-                        className="form-select"
+                        className={`form-select ${validationErrors.state ? 'error' : ''}`}
                       >
                         <option value="">Select State</option>
                         {stateOptions.map(state => (
@@ -588,28 +794,44 @@ const Parties = () => {
                           </option>
                         ))}
                       </select>
+                      {validationErrors.state && (
+                        <span className="error-message">{validationErrors.state}</span>
+                      )}
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">City</label>
+                      <label className="form-label">
+                        City <span className="required">*</span>
+                      </label>
                       <input
                         type="text"
+                        required
                         value={formData.city}
-                        onChange={(e) => setFormData({...formData, city: e.target.value})}
-                        className="form-input"
+                        onChange={(e) => handleInputChange('city', e.target.value)}
+                        className={`form-input ${validationErrors.city ? 'error' : ''}`}
                         placeholder="Enter city"
                       />
+                      {validationErrors.city && (
+                        <span className="error-message">{validationErrors.city}</span>
+                      )}
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">Pincode</label>
+                      <label className="form-label">
+                        Pincode <span className="required">*</span>
+                      </label>
                       <input
                         type="text"
+                        required
                         value={formData.pincode}
-                        onChange={(e) => setFormData({...formData, pincode: e.target.value})}
-                        className="form-input"
-                        placeholder="Enter pincode"
+                        onChange={(e) => handleInputChange('pincode', e.target.value)}
+                        className={`form-input ${validationErrors.pincode ? 'error' : ''}`}
+                        placeholder="Enter pincode (6 digits)"
+                        maxLength="6"
                       />
+                      {validationErrors.pincode && (
+                        <span className="error-message">{validationErrors.pincode}</span>
+                      )}
                     </div>
 
                     <div className="form-group">
@@ -617,12 +839,15 @@ const Parties = () => {
                       <input
                         type="number"
                         value={formData.creditLimit}
-                        onChange={(e) => setFormData({...formData, creditLimit: e.target.value})}
-                        className="form-input"
+                        onChange={(e) => handleInputChange('creditLimit', e.target.value)}
+                        className={`form-input ${validationErrors.creditLimit ? 'error' : ''}`}
                         placeholder="Enter credit limit"
                         min="0"
                         step="0.01"
                       />
+                      {validationErrors.creditLimit && (
+                        <span className="error-message">{validationErrors.creditLimit}</span>
+                      )}
                     </div>
 
                     <div className="form-group">
@@ -630,11 +855,15 @@ const Parties = () => {
                       <input
                         type="number"
                         value={formData.creditDays}
-                        onChange={(e) => setFormData({...formData, creditDays: e.target.value})}
-                        className="form-input"
-                        placeholder="Enter credit days"
+                        onChange={(e) => handleInputChange('creditDays', e.target.value)}
+                        className={`form-input ${validationErrors.creditDays ? 'error' : ''}`}
+                        placeholder="Enter credit days (max 365)"
                         min="0"
+                        max="365"
                       />
+                      {validationErrors.creditDays && (
+                        <span className="error-message">{validationErrors.creditDays}</span>
+                      )}
                     </div>
 
                     <div className="form-group">
@@ -650,14 +879,20 @@ const Parties = () => {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Address</label>
+                    <label className="form-label">
+                      Address <span className="required">*</span>
+                    </label>
                     <textarea
+                      required
                       value={formData.address}
-                      onChange={(e) => setFormData({...formData, address: e.target.value})}
+                      onChange={(e) => handleInputChange('address', e.target.value)}
                       rows="3"
-                      className="form-textarea"
+                      className={`form-textarea ${validationErrors.address ? 'error' : ''}`}
                       placeholder="Enter complete address"
                     />
+                    {validationErrors.address && (
+                      <span className="error-message">{validationErrors.address}</span>
+                    )}
                   </div>
                 </div>
 
@@ -715,74 +950,105 @@ const Parties = () => {
 
       {/* View Modal */}
       {showViewModal && selectedParty && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Party Details</h2>
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="text-white hover:text-gray-200 transition-colors"
-                >
-                  <X size={24} />
-                </button>
-              </div>
+        <div className="modal-overlay">
+          <div className="view-modal-container">
+            <div className="view-modal-header">
+              <h2 className="view-modal-title">Party Details</h2>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="close-button"
+              >
+                <X size={24} />
+              </button>
             </div>
             
-            <div className="p-6">
-            
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Party Code</label>
-                  <p className="text-sm text-gray-900">{selectedParty.partyCode}</p>
+            <div className="view-modal-body">
+              <div className="view-details-grid">
+                <div className="view-field">
+                  <label className="view-label">Party Code</label>
+                  <p className="view-value">{selectedParty.partyCode}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Name</label>
-                  <p className="text-sm text-gray-900">{selectedParty.name}</p>
+                <div className="view-field">
+                  <label className="view-label">Name</label>
+                  <p className="view-value">{selectedParty.name}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Type</label>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getTypeColor(selectedParty.type)}`}>
+                <div className="view-field">
+                  <label className="view-label">Type</label>
+                  <span className={`type-badge ${getTypeColor(selectedParty.type).replace('bg-', 'type-').replace('-100', '').replace(' text-', ' type-')}`}>
                     {selectedParty.type}
                   </span>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Contact Person</label>
-                  <p className="text-sm text-gray-900">{selectedParty.contactPerson}</p>
+                <div className="view-field">
+                  <label className="view-label">Contact Person</label>
+                  <p className="view-value">{selectedParty.contactPerson || 'N/A'}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Email</label>
-                  <p className="text-sm text-gray-900">{selectedParty.email}</p>
+                <div className="view-field">
+                  <label className="view-label">Email</label>
+                  <p className="view-value">{selectedParty.email || 'N/A'}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Phone</label>
-                  <p className="text-sm text-gray-900">{selectedParty.phone}</p>
+                <div className="view-field">
+                  <label className="view-label">Phone</label>
+                  <p className="view-value">{selectedParty.phone || 'N/A'}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">GST Number</label>
-                  <p className="text-sm text-gray-900">{selectedParty.gstNumber}</p>
+                <div className="view-field">
+                  <label className="view-label">Mobile</label>
+                  <p className="view-value">{selectedParty.mobile || 'N/A'}</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">State</label>
-                  <p className="text-sm text-gray-900">{selectedParty.state} ({selectedParty.stateCode})</p>
+                <div className="view-field">
+                  <label className="view-label">GST Number</label>
+                  <p className="view-value">{selectedParty.gstNumber || 'N/A'}</p>
+                </div>
+                <div className="view-field">
+                  <label className="view-label">PAN Number</label>
+                  <p className="view-value">{selectedParty.panNumber || 'N/A'}</p>
+                </div>
+                <div className="view-field">
+                  <label className="view-label">State</label>
+                  <p className="view-value">{selectedParty.state} ({selectedParty.stateCode})</p>
+                </div>
+                <div className="view-field">
+                  <label className="view-label">City</label>
+                  <p className="view-value">{selectedParty.city || 'N/A'}</p>
+                </div>
+                <div className="view-field">
+                  <label className="view-label">Pincode</label>
+                  <p className="view-value">{selectedParty.pincode || 'N/A'}</p>
+                </div>
+                <div className="view-field">
+                  <label className="view-label">Credit Limit</label>
+                  <p className="view-value">₹{selectedParty.creditLimit || '0.00'}</p>
+                </div>
+                <div className="view-field">
+                  <label className="view-label">Credit Days</label>
+                  <p className="view-value">{selectedParty.creditDays || '0'} days</p>
                 </div>
               </div>
               
               {selectedParty.address && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Address</label>
-                  <p className="text-sm text-gray-900">{selectedParty.address}</p>
+                <div className="view-field-full">
+                  <label className="view-label">Address</label>
+                  <p className="view-value">{selectedParty.address}</p>
+                </div>
+              )}
+              
+              {selectedParty.paymentTerms && (
+                <div className="view-field-full">
+                  <label className="view-label">Payment Terms</label>
+                  <p className="view-value">{selectedParty.paymentTerms}</p>
                 </div>
               )}
               
               {selectedParty.notes && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-500">Notes</label>
-                  <p className="text-sm text-gray-900">{selectedParty.notes}</p>
+                <div className="view-field-full">
+                  <label className="view-label">Notes</label>
+                  <p className="view-value">{selectedParty.notes}</p>
                 </div>
               )}
-            </div>
+              
+              <div className="view-field-full">
+                <label className="view-label">Created</label>
+                <p className="view-value">{new Date(selectedParty.createdAt).toLocaleString()}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -1121,11 +1387,6 @@ const Parties = () => {
         color: #166534;
       }
 
-      .type-both {
-        background-color: #e9d5ff;
-        color: #7c3aed;
-      }
-
       .contact-info {
         font-size: 14px;
         color: #111827;
@@ -1264,10 +1525,11 @@ const Parties = () => {
       }
 
       .modal-header {
-        background: linear-gradient(to right, #2563eb, #1d4ed8);
-        color: white;
+        background: white;
+        color: #111827;
         padding: 24px;
         border-radius: 12px 12px 0 0;
+        border-bottom: 1px solid #e5e7eb;
       }
 
       .modal-header-content {
@@ -1280,6 +1542,7 @@ const Parties = () => {
         font-size: 20px;
         font-weight: 600;
         margin: 0;
+        color: #111827;
       }
 
       .modal-body {
@@ -1362,6 +1625,29 @@ const Parties = () => {
         border-color: #9ca3af;
       }
 
+      .form-input.error, .form-select.error, .form-textarea.error {
+        border-color: #dc2626;
+        background-color: #fef2f2;
+      }
+
+      .form-input.error:focus, .form-select.error:focus, .form-textarea.error:focus {
+        border-color: #dc2626;
+        ring-color: #dc2626;
+      }
+
+      .error-message {
+        display: block;
+        color: #dc2626;
+        font-size: 12px;
+        margin-top: 4px;
+        font-weight: 500;
+      }
+
+      .required {
+        color: #dc2626;
+        font-weight: bold;
+      }
+
       .form-textarea {
         resize: vertical;
         min-height: 80px;
@@ -1410,10 +1696,11 @@ const Parties = () => {
       }
 
       .view-modal-header {
-        background: linear-gradient(to right, #2563eb, #1d4ed8);
-        color: white;
+        background: white;
+        color: #111827;
         padding: 24px;
         border-radius: 12px 12px 0 0;
+        border-bottom: 1px solid #e5e7eb;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -1423,10 +1710,11 @@ const Parties = () => {
         font-size: 20px;
         font-weight: 600;
         margin: 0;
+        color: #111827;
       }
 
       .close-button {
-        color: white;
+        color: #6b7280;
         background: none;
         border: none;
         cursor: pointer;
@@ -1436,7 +1724,8 @@ const Parties = () => {
       }
 
       .close-button:hover {
-        color: #e5e7eb;
+        color: #374151;
+        background-color: #f3f4f6;
       }
 
       .view-content {
@@ -1512,6 +1801,92 @@ const Parties = () => {
         margin-top: 24px;
         color: #6b7280;
         font-size: 18px;
+      }
+
+      /* View Modal Styles */
+      .view-modal-container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+        width: 100%;
+        max-width: 768px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .view-modal-header {
+        background: white;
+        color: #111827;
+        padding: 24px;
+        border-radius: 12px 12px 0 0;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .view-modal-title {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        color: #111827;
+      }
+
+      .view-modal-body {
+        padding: 24px;
+      }
+
+      .view-details-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 20px;
+        margin-bottom: 24px;
+      }
+
+      @media (min-width: 768px) {
+        .view-details-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      .view-field {
+        display: flex;
+        flex-direction: column;
+        padding: 16px;
+        background-color: #f9fafb;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+      }
+
+      .view-field-full {
+        display: flex;
+        flex-direction: column;
+        padding: 16px;
+        background-color: #f9fafb;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 16px;
+      }
+
+      .view-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+      }
+
+      .view-value {
+        font-size: 16px;
+        font-weight: 500;
+        color: #111827;
+        line-height: 1.5;
+      }
+
+      .view-field .type-badge {
+        align-self: flex-start;
+        margin-top: 4px;
       }
     `}</style>
     </>

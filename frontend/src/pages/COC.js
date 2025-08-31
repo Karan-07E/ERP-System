@@ -190,22 +190,21 @@ const COC = () => {
   };
 
   return (
-    <>
-      <div className="coc-container">
-      <div className="content-wrapper">
+    <React.Fragment>
+      <div className="coc-page">
+        <div className="coc-container">
+          <div className="content-wrapper">
         {/* Header */}
-        <div className="header-card">
-          <div className="header-content">
-            <div>
-              <h1 className="header-title">
-                <FileText className="text-blue-600" size={32} />
-                Certificate of Conformance
-              </h1>
-              <p className="header-subtitle">Manage quality certificates and compliance documents</p>
-            </div>
+        <div className="page-header">
+          <div className="page-title">
+            <FileText size={24} />
+            <h1>Certificate of Conformance</h1>
+          </div>
+          <p>Manage quality certificates and compliance documents</p>
+          <div className="header-actions">
             <button
               onClick={() => setShowCreateModal(true)}
-              className="create-button"
+              className="btn btn-primary"
             >
               <Plus size={20} />
               Create COC
@@ -214,102 +213,81 @@ const COC = () => {
         </div>
 
         {/* Filters */}
-        <div className="filters-card">
-          <div className="filters-content">
-            <div className="search-container">
-              <div className="relative">
-                <Search className="search-icon" size={20} />
-                <input
-                  type="text"
-                  placeholder="Search by COC number, job, or order..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                />
-              </div>
+        <div className="controls">
+          <div className="search-section">
+            <div className="search-box">
+              <Search size={20} />
+              <input
+                type="text"
+                placeholder="Search by COC number, job, or order..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white min-w-[140px]"
-              >
-                <option value="">All Status</option>
-                <option value="draft">Draft</option>
-                <option value="approved">Approved</option>
-              </select>
-              <button
-                onClick={fetchCOCs}
-                className="p-3 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <RefreshCw size={20} />
-              </button>
-            </div>
+          </div>
+          <div className="action-buttons">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="">All Status</option>
+              <option value="draft">Draft</option>
+              <option value="approved">Approved</option>
+            </select>
+            <button
+              onClick={fetchCOCs}
+              className="btn btn-secondary"
+            >
+              <RefreshCw size={20} />
+            </button>
           </div>
         </div>
 
         {/* COC List */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="data-section">
           {loading ? (
-            <div className="p-12 text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-6 text-gray-600 text-lg">Loading COCs...</p>
-            </div>
+            <div className="loading">Loading COCs...</div>
           ) : cocs.length === 0 ? (
-            <div className="p-12 text-center">
-              <FileText size={64} className="mx-auto text-gray-300 mb-6" />
-              <h3 className="text-xl font-medium text-gray-900 mb-3">No COCs found</h3>
-              <p className="text-gray-600 mb-6">Create your first Certificate of Conformance to get started.</p>
+            <div className="empty-state">
+              <FileText size={48} />
+              <h3>No COCs found</h3>
+              <p>Create your first Certificate of Conformance to get started.</p>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
+                className="btn btn-primary"
               >
                 <Plus size={20} />
                 Create COC
               </button>
             </div>
           ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+            <div className="data-table-container">
+              <table className="data-table">
+                <thead>
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      COC Details
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Job & Order
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Customer
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    <th>COC Details</th>
+                    <th>Job & Order</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody>
                   {cocs.map((coc) => (
-                    <tr key={coc.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                    <tr key={coc.id}>
+                      <td>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {coc.cocNumber}
-                          </div>
+                          <div className="font-medium">{coc.cocNumber}</div>
                           <div className="text-sm text-gray-500">
                             Inspection: {formatDate(coc.inspectionDate)}
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="font-medium">
                             {coc.job?.jobNumber || 'N/A'}
                           </div>
                           <div className="text-sm text-gray-500">
@@ -317,32 +295,32 @@ const COC = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                      <td>
+                        <div>
                           {coc.job?.orderItem?.order?.party?.name || 'N/A'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td>
                         {getStatusBadge(coc.status)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td>
                         {formatDate(coc.createdAt)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center gap-3">
+                      <td>
+                        <div className="action-buttons">
                           <button
                             onClick={() => {
                               setSelectedCOC(coc);
                               setShowViewModal(true);
                             }}
-                            className="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-md transition-colors"
+                            className="btn-icon"
                             title="View Details"
                           >
                             <Eye size={16} />
                           </button>
                           <button
                             onClick={() => handleDownloadPDF(coc.id, coc.cocNumber)}
-                            className="text-green-600 hover:text-green-800 p-2 hover:bg-green-50 rounded-md transition-colors"
+                            className="btn-icon btn-success"
                             title="Download PDF"
                           >
                             <Download size={16} />
@@ -350,7 +328,7 @@ const COC = () => {
                           {coc.status === 'draft' && (
                             <button
                               onClick={() => handleApproveCOC(coc.id)}
-                              className="text-purple-600 hover:text-purple-800 p-2 hover:bg-purple-50 rounded-md transition-colors"
+                              className="btn-icon btn-primary"
                               title="Approve COC"
                             >
                               <Check size={16} />
@@ -363,71 +341,63 @@ const COC = () => {
                 </tbody>
               </table>
             </div>
-
+          )}
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                <div className="flex-1 flex justify-between sm:hidden">
+              <div className="pagination">
+                <div className="pagination-info">
+                  <p>
+                    Page <span className="font-medium">{currentPage}</span> of{' '}
+                    <span className="font-medium">{totalPages}</span>
+                  </p>
+                </div>
+                <div className="pagination-buttons">
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    className="pagination-button"
                   >
                     Previous
                   </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`pagination-button ${
+                        page === currentPage ? 'active' : ''
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
                   <button
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    className="pagination-button"
                   >
                     Next
                   </button>
                 </div>
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm text-gray-700">
-                      Page <span className="font-medium">{currentPage}</span> of{' '}
-                      <span className="font-medium">{totalPages}</span>
-                    </p>
-                  </div>
-                  <div>
-                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                            page === currentPage
-                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      ))}
-                    </nav>
-                  </div>
-                </div>
               </div>
             )}
-          </>
-        )}
+            </div>
+          )
+        </div>
+      </div>
       </div>
 
       {/* Create COC Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-          <div className="relative bg-white rounded-xl shadow-2xl w-11/12 md:w-3/4 lg:w-1/2 max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-xl">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-semibold">Create Certificate of Conformance</h3>
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="text-white hover:text-gray-200 transition-colors"
-                >
-                  <X size={24} />
-                </button>
-              </div>
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Create Certificate of Conformance</h3>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="close-button"
+              >
+                <X size={24} />
+              </button>
             </div>
             
             <div className="p-6">
@@ -724,9 +694,7 @@ const COC = () => {
                               <td className="px-3 py-2 text-sm text-gray-900">{report.measuredValue} {report.unit}</td>
                               <td className="px-3 py-2 text-sm text-gray-900">{report.tolerance || '-'}</td>
                               <td className="px-3 py-2">
-                                <span className={`px-2 py-1 text-xs rounded ${
-                                  report.result === 'pass' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                }`}>
+                                <span className={`px-2 py-1 text-xs rounded ${report.result === 'pass' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                                   {report.result?.toUpperCase()}
                                 </span>
                               </td>
@@ -791,21 +759,408 @@ const COC = () => {
                 </button>
               </div>
             </div>
-            </div>
           </div>
         </div>
       )}
-      </div>
-    </div>
 
-    <style jsx>{`
-      .page {
-        padding: 20px 0;
-        background-color: #f8fafc;
+      <style jsx>{`
+      .coc-page {
         min-height: 100vh;
+        background-color: #f8fafc;
+      }
+
+      .coc-container {
+        padding: 20px 0;
       }
 
       .content-wrapper {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 16px;
+      }
+
+      .page-header {
+        margin-bottom: 30px;
+      }
+      
+      .page-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+      
+      .page-title h1 {
+        font-size: 28px;
+        font-weight: 600;
+        color: #333;
+        margin: 0;
+      }
+      
+      .page-header p {
+        color: #666;
+        font-size: 16px;
+        margin: 0 0 20px 0;
+      }
+
+      .header-actions {
+        margin-top: 16px;
+      }
+
+      /* Controls */
+      .controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        gap: 16px;
+      }
+
+      .search-section {
+        display: flex;
+        gap: 12px;
+        flex: 1;
+        max-width: 400px;
+      }
+
+      .search-box {
+        position: relative;
+        flex: 1;
+      }
+
+      .search-box svg {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #666;
+      }
+
+      .search-box input {
+        width: 100%;
+        padding: 10px 10px 10px 40px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .filter-select {
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        background: white;
+        min-width: 140px;
+      }
+
+      /* Data Section */
+      .data-section {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e0e0e0;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 60px 20px;
+        font-size: 18px;
+        color: #666;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #666;
+      }
+
+      .empty-state svg {
+        color: #ccc;
+        margin-bottom: 16px;
+      }
+
+      .empty-state h3 {
+        font-size: 20px;
+        margin-bottom: 8px;
+        color: #333;
+      }
+
+      .empty-state p {
+        margin-bottom: 24px;
+      }
+
+      .data-table-container {
+        overflow-x: auto;
+      }
+
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .data-table th {
+        background-color: #f8f9fa;
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+        border-bottom: 1px solid #e0e0e0;
+        white-space: nowrap;
+      }
+
+      .data-table td {
+        padding: 12px;
+        border-bottom: 1px solid #f0f0f0;
+        color: #333;
+      }
+
+      .data-table tr:hover {
+        background-color: #f8f9fa;
+      }
+
+      .font-medium {
+        font-weight: 500;
+      }
+
+      .text-sm {
+        font-size: 12px;
+      }
+
+      .text-gray-500 {
+        color: #6b7280;
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 4px;
+      }
+
+      /* Buttons */
+      .btn {
+        padding: 10px 20px;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn-primary {
+        background-color: #007bff;
+        color: white;
+        border-color: #007bff;
+      }
+
+      .btn-primary:hover:not(:disabled) {
+        background-color: #0056b3;
+        border-color: #0056b3;
+      }
+
+      .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+        border-color: #6c757d;
+      }
+
+      .btn-secondary:hover {
+        background-color: #5a6268;
+        border-color: #5a6268;
+      }
+
+      .btn-icon {
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 6px;
+        cursor: pointer;
+        color: #666;
+        transition: all 0.2s;
+      }
+
+      .btn-icon:hover {
+        background: #e9ecef;
+        color: #007bff;
+      }
+
+      .btn-icon.btn-success:hover {
+        background: #d4edda;
+        color: #28a745;
+      }
+
+      .btn-icon.btn-primary:hover {
+        background: #dbeafe;
+        color: #007bff;
+      }
+
+      /* Status badges */
+      .bg-yellow-100 { background-color: #fef3c7; }
+      .text-yellow-800 { color: #92400e; }
+      .bg-green-100 { background-color: #dcfce7; }
+      .text-green-800 { color: #166534; }
+      .bg-gray-100 { background-color: #f3f4f6; }
+      .text-gray-800 { color: #1f2937; }
+
+      /* Pagination */
+      .pagination {
+        padding: 16px 24px;
+        border-top: 1px solid #e0e0e0;
+        background-color: #f8f9fa;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .pagination-info {
+        font-size: 14px;
+        color: #374151;
+        font-weight: 500;
+      }
+
+      .pagination-buttons {
+        display: flex;
+        gap: 8px;
+      }
+
+      .pagination-button {
+        padding: 8px 16px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 14px;
+      }
+
+      .pagination-button:hover:not(:disabled) {
+        background-color: #f9fafb;
+      }
+
+      .pagination-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .pagination-button.active {
+        background-color: #007bff;
+        color: white;
+        border-color: #007bff;
+      }
+
+      /* Modal Styles */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .modal {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        max-width: 700px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        border-bottom: 1px solid #e0e0e0;
+        background: white;
+      }
+
+      .modal-header h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+      }
+
+      .close-button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 5px;
+        border-radius: 4px;
+        color: #666;
+      }
+
+      .close-button:hover {
+        background-color: #f0f0f0;
+        color: #333;
+      }
+
+      .modal-body {
+        padding: 20px;
+      }
+
+      .form-group {
+        margin-bottom: 16px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+        color: #333;
+      }
+
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+      }
+
+      .form-group input:focus,
+      .form-group select:focus,
+      .form-group textarea:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      }
+
+      @media (max-width: 768px) {
+        .controls {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+        }
+
+        .search-section {
+          max-width: none;
+        }
+
+        .modal {
+          width: 95%;
+          margin: 10px;
+        }
+      }      .content-wrapper {
         max-width: 1280px;
         margin: 0 auto;
         padding: 0 16px;
@@ -1537,7 +1892,7 @@ const COC = () => {
         font-size: 18px;
       }
     `}</style>
-    </>
+    </div>
   );
 };
 
