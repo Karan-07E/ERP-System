@@ -12,6 +12,12 @@ const COC = sequelize.define('COC', {
     allowNull: false,
     unique: true
   },
+  cocId: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    unique: true,
+    field: 'cocId'
+  },
   jobId: {
     type: DataTypes.UUID,
     allowNull: false,

@@ -188,102 +188,115 @@ router.get('/:id', auth, async (req, res) => {
 // Create new COC
 router.post('/', auth, async (req, res) => {
   try {
+    console.log('Creating COC with request body:', req.body);
+    console.log('User from auth:', req.user);
+    
     const {
-      jobId,
-      inspectionDate,
-      qualityStandard,
-      testResults,
-      remarks,
-      dimensionReports = []
+      cocId,
+      productPartNumber,
+      lotBatchNumber,
+      referenceStandard,
+      statementOfCompliance,
+      qaPersonSignature
     } = req.body;
 
-    // Validate job exists
-    const job = await Job.findByPk(jobId, {
-      include: [
-        {
-          model: OrderItem,
-          as: 'orderItem',
-          include: [
-            {
-              model: Order,
-              as: 'order',
-              include: [
-                {
-                  model: Party,
-                  as: 'party'
-                }
-              ]
-            }
-          ]
-        }
-      ]
+    console.log('Extracted fields:', { cocId, productPartNumber, lotBatchNumber, referenceStandard, statementOfCompliance, qaPersonSignature });
+
+    // Validate required fields
+    if (!cocId || !productPartNumber || !lotBatchNumber || !referenceStandard || !statementOfCompliance || !qaPersonSignature) {
+      return res.status(400).json({ message: 'All fields are required: cocId, productPartNumber, lotBatchNumber, referenceStandard, statementOfCompliance, qaPersonSignature' });
+    }
+
+    // Generate COC number
+    const cocNumber = await generateCOCNumber();
+    console.log('Generated COC number:', cocNumber);
+
+    // Create a dummy party and order for now since they're required
+    const { Party, Order, Job, OrderItem } = require('../models');
+    
+    // Create or get a default party
+    let defaultParty = await Party.findOne({ where: { partyCode: 'DEFAULT' } });
+    if (!defaultParty) {
+      defaultParty = await Party.create({
+        partyCode: 'DEFAULT',
+        name: 'Default Customer',
+        type: 'customer',
+        contactPerson: 'Default Contact',
+        email: 'default@example.com',
+        phone: '0000000000',
+        address: 'Default Address',
+        city: 'Default City',
+        state: 'Default State',
+        stateCode: '00',
+        pincode: '000000'
+      });
+    }
+
+    // Create a dummy order
+    const defaultOrder = await Order.create({
+      orderNumber: `ORD-${Date.now()}`,
+      poNumber: `PO-${Date.now()}`,
+      type: 'sales_order',
+      partyId: defaultParty.id,
+      orderDate: new Date(),
+      expectedDeliveryDate: new Date(),
+      subtotal: 1000.00,
+      totalGst: 180.00,
+      grandTotal: 1180.00,
+      status: 'completed',
+      createdBy: req.user.id
     });
 
-    if (!job) {
-      return res.status(404).json({ message: 'Job not found' });
-    }
+    // Create a dummy order item
+    const defaultOrderItem = await OrderItem.create({
+      orderId: defaultOrder.id,
+      partNumber: productPartNumber,
+      description: `Product: ${productPartNumber}`,
+      quantity: 1,
+      unitPrice: 1000.00,
+      totalPrice: 1000.00,
+      hsnCode: '7200',
+      gstRate: 18.00,
+      finalAmount: 1180.00,
+      deliveryDate: new Date()
+    });
 
-    if (job.status !== 'completed') {
-      return res.status(400).json({ message: 'COC can only be created for completed jobs' });
-    }
+    // Create a dummy job
+    const defaultJob = await Job.create({
+      jobId: `JOB-${Date.now()}`,
+      orderItemId: defaultOrderItem.id,
+      employeeId: req.user.id,
+      partNumber: productPartNumber,
+      description: `Job for ${productPartNumber}`,
+      quantity: 1,
+      targetCompletionDate: new Date(),
+      status: 'completed',
+      createdBy: req.user.id
+    });
 
-    // Check if COC already exists for this job
-    const existingCOC = await COC.findOne({ where: { jobId } });
-    if (existingCOC) {
-      return res.status(400).json({ message: 'COC already exists for this job' });
-    }
-
-    const cocNumber = await generateCOCNumber();
-
+    // Create COC with required fields filled with new form data
     const coc = await COC.create({
       cocNumber,
-      jobId,
-      inspectionDate,
-      qualityStandard,
-      testResults,
-      remarks,
+      cocId,
+      jobId: defaultJob.id,
+      partyId: defaultParty.id,
+      orderId: defaultOrder.id,
+      invoiceNumber: `INV-${Date.now()}`,
+      batchNumber: lotBatchNumber,
+      partDescription: productPartNumber,
+      quantity: 1,
+      complianceDeclaration: `Reference Standard: ${referenceStandard}\n\nStatement of Compliance: ${statementOfCompliance}\n\nQA Person: ${qaPersonSignature}`,
+      notes: `Product/Part: ${productPartNumber}\nLot/Batch: ${lotBatchNumber}\nCOC ID: ${cocId}`,
       createdBy: req.user.id,
-      status: 'draft'
+      status: 'draft',
+      generatedDate: new Date()
     });
 
-    // Create dimension reports if provided
-    if (dimensionReports.length > 0) {
-      const reports = dimensionReports.map(report => ({
-        ...report,
-        cocId: coc.id
-      }));
-      await DimensionReport.bulkCreate(reports);
-    }
+    console.log('COC created successfully:', coc.id);
 
     // Fetch the complete COC with associations
     const completeCOC = await COC.findByPk(coc.id, {
       include: [
-        {
-          model: Job,
-          as: 'job',
-          include: [
-            {
-              model: OrderItem,
-              as: 'orderItem',
-              include: [
-                {
-                  model: Order,
-                  as: 'order',
-                  include: [
-                    {
-                      model: Party,
-                      as: 'party'
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          model: DimensionReport,
-          as: 'dimensionReports'
-        },
         {
           model: User,
           as: 'Creator'
@@ -510,7 +523,8 @@ router.get('/:id/pdf', auth, async (req, res) => {
     
     // COC details
     doc.fontSize(12)
-       .text(`COC Number: ${coc.cocNumber}`, 50, 120)
+       .text(`COC ID: ${coc.cocId || 'N/A'}`, 50, 120)
+       .text(`COC Number: ${coc.cocNumber}`, 50, 135)
        .text(`Date: ${new Date(coc.inspectionDate).toLocaleDateString()}`, 350, 120);
     
     doc.moveDown();

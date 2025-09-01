@@ -52,6 +52,11 @@ COC.belongsTo(Job, { foreignKey: 'jobId', as: 'job' });
 COC.hasMany(DimensionReport, { foreignKey: 'cocId', as: 'dimensionReports' });
 DimensionReport.belongsTo(COC, { foreignKey: 'cocId', as: 'certificate' });
 
+// COC User associations
+COC.belongsTo(User, { foreignKey: 'createdBy', as: 'Creator' });
+COC.belongsTo(User, { foreignKey: 'approvedBy', as: 'Approver' });
+DimensionReport.belongsTo(User, { foreignKey: 'measuredBy', as: 'MeasuredBy' });
+
 User.hasMany(InternalMessage, { foreignKey: 'fromUserId', as: 'sentInternalMessages' });
 User.hasMany(InternalMessage, { foreignKey: 'toUserId', as: 'receivedInternalMessages' });
 InternalMessage.belongsTo(User, { foreignKey: 'fromUserId', as: 'fromUser' });
