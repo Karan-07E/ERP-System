@@ -24,6 +24,7 @@ const jobRoutes = require('./routes/jobs');
 const dashboardRoutes = require('./routes/dashboard');
 const cocRoutes = require('./routes/coc');
 const analyticsRoutes = require('./routes/analytics');
+const dimensionReportsRoutes = require('./routes/dimensionReports');
 
 const app = express();
 const server = createServer(app);
@@ -168,6 +169,7 @@ app.use('/api/parties', require('./routes/parties'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/coc', require('./routes/coc'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/dimension-reports', dimensionReportsRoutes);
 
 // API Health check - v2
 app.get('/api/health', (req, res) => {

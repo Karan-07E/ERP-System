@@ -14,6 +14,7 @@ import {
 const COC = () => {
   const [cocs, setCocs] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -26,6 +27,9 @@ const COC = () => {
     cocId: '',
     productPartNumber: '',
     lotBatchNumber: '',
+    jobOrderId: '',
+    customerId: '',
+    inspectionDate: new Date().toISOString().split('T')[0],
     referenceStandard: '',
     statementOfCompliance: '',
     qaPersonSignature: ''
@@ -34,6 +38,7 @@ const COC = () => {
     useEffect(() => {
     fetchCOCs();
     fetchJobs();
+    fetchCustomers();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -69,6 +74,19 @@ const COC = () => {
       console.error('Error fetching jobs:', error);
       setJobs([]);
     }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/parties?type=customer', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCustomers(response.data.parties || []);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      setCustomers([]);
+    }
   };  const handleCreateCOC = async (e) => {
     e.preventDefault();
     try {
@@ -90,10 +108,10 @@ const COC = () => {
     }
   };
 
-  const handleApproveCOC = async (cocId) => {
+  const handleApproveCOC = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`/coc/${cocId}/approve`, {}, {
+      await axios.post(`/coc/${id}/approve`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchCOCs();
@@ -125,10 +143,14 @@ const COC = () => {
   };
 
   const resetForm = () => {
+    const today = new Date().toISOString().split('T')[0];
     setFormData({
       cocId: '',
       productPartNumber: '',
       lotBatchNumber: '',
+      jobOrderId: '',
+      customerId: '',
+      inspectionDate: today,
       referenceStandard: '',
       statementOfCompliance: '',
       qaPersonSignature: ''
@@ -395,6 +417,48 @@ const COC = () => {
                   </div>
 
                   <div className="form-group">
+                    <label>Job & Order</label>
+                    <select
+                      value={formData.jobOrderId}
+                      onChange={(e) => setFormData(prev => ({ ...prev, jobOrderId: e.target.value }))}
+                      required
+                    >
+                      <option value="">Select Job & Order</option>
+                      {jobs.map((job) => (
+                        <option key={job.id} value={job.id}>
+                          Job: {job.jobNumber} - Order: {job.orderItem?.order?.orderNumber || 'N/A'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Customer</label>
+                    <select
+                      value={formData.customerId}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customerId: e.target.value }))}
+                      required
+                    >
+                      <option value="">Select Customer</option>
+                      {customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name} ({customer.type})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Inspection Date</label>
+                    <input
+                      type="date"
+                      value={formData.inspectionDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, inspectionDate: e.target.value }))}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
                     <label>Reference Standard or Specification</label>
                     <textarea
                       value={formData.referenceStandard}
@@ -590,13 +654,11 @@ const COC = () => {
 
                   {/* Approval Info */}
                   {selectedCOC.status === 'approved' && selectedCOC.Approver && (
-                    <div className="view-section">
-                      <h4 className="view-section-title">Approval Information</h4>
-                      <div className="approval-box">
-                        <p>
-                          <strong>Approved by:</strong> {selectedCOC.Approver.firstName} {selectedCOC.Approver.lastName}<br />
-                          <strong>Approved on:</strong> {formatDate(selectedCOC.approvedAt)}
-                        </p>
+                    <div className="view-form-field full-width">
+                      <label>Approval Information</label>
+                      <div className="view-form-textarea">
+                        <strong>Approved by:</strong> {selectedCOC.Approver.firstName} {selectedCOC.Approver.lastName}<br />
+                        <strong>Approved on:</strong> {formatDate(selectedCOC.approvedAt)}
                       </div>
                     </div>
                   )}
@@ -634,6 +696,7 @@ const COC = () => {
             </div>
           </div>
         )}
+
         <style jsx>{`
           .coc-page {
             min-height: 100vh;
@@ -1124,10 +1187,11 @@ const COC = () => {
           }
 
           .view-modal-header {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            color: white;
+            background: white;
+            color: #111827;
             padding: 24px;
             border-radius: 12px 12px 0 0;
+            border-bottom: 1px solid #e5e7eb;
           }
 
           .view-modal-header-content {
@@ -1145,7 +1209,7 @@ const COC = () => {
           .view-modal-close {
             background: none;
             border: none;
-            color: white;
+            color: #6b7280;
             cursor: pointer;
             padding: 8px;
             border-radius: 6px;
@@ -1153,7 +1217,8 @@ const COC = () => {
           }
 
           .view-modal-close:hover {
-            background: rgba(255, 255, 255, 0.2);
+            background: #f3f4f6;
+            color: #111827;
           }
 
           .view-modal-body {
@@ -1299,6 +1364,118 @@ const COC = () => {
             font-size: 14px;
             color: #166534;
             line-height: 1.6;
+          }
+
+          .view-form {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+          }
+
+          .view-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+          }
+
+          .view-form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .view-form-field.full-width {
+            grid-column: 1 / -1;
+          }
+
+          .view-form-field label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
+          .view-form-value {
+            padding: 12px;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #111827;
+            min-height: 20px;
+          }
+
+          .view-form-textarea {
+            padding: 12px;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #111827;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            min-height: 80px;
+          }
+
+          /* Form Grid and Field Styles */
+          .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+          }
+
+          .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          .form-field.full-width {
+            grid-column: 1 / -1;
+          }
+
+          .form-field label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+          }
+
+          .form-field input,
+          .form-field select,
+          .form-field textarea {
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+          }
+
+          .form-field input:focus,
+          .form-field select:focus,
+          .form-field textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          }
+
+          .file-input {
+            padding: 8px !important;
+            border: 2px dashed #d1d5db !important;
+            background-color: #f9fafb;
+            cursor: pointer;
+          }
+
+          .file-input:hover {
+            border-color: #3b82f6 !important;
+            background-color: #eff6ff;
+          }
+
+          .form-help {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 4px;
           }
 
           .view-modal-actions {
