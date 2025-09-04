@@ -38,7 +38,7 @@ const DimensionReport = () => {
   const fetchDimensionReports = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/dimension-reports', {
+      const response = await axios.get('/api/dimension-reports', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -80,7 +80,7 @@ const DimensionReport = () => {
       });
 
       const token = localStorage.getItem('token');
-      const response = await axios.post('/dimension-reports', formDataToSend, {
+      const response = await axios.post('/api/dimension-reports', formDataToSend, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -169,125 +169,8 @@ const DimensionReport = () => {
     }
   };
 
-  const handleExportReport = (report) => {
-    try {
-      // Create CSV content
-      const csvContent = generateCSVContent(report);
-      
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `dimension_report_${report.cocId}_${report.id}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      toast.success('Report exported successfully!');
-    } catch (error) {
-      console.error('Export error:', error);
-      toast.error('Failed to export report');
-    }
-  };
-
-  const generateCSVContent = (report) => {
-    const headers = [
-      'Report ID',
-      'COC ID', 
-      'Job ID',
-      'Check Type',
-      'Check Description',
-      'Parameter',
-      'Specification',
-      'Tolerance',
-      'Sample 1 Value',
-      'Sample 1 Status',
-      'Sample 2 Value', 
-      'Sample 2 Status',
-      'Sample 3 Value',
-      'Sample 3 Status', 
-      'Sample 4 Value',
-      'Sample 4 Status',
-      'Sample 5 Value',
-      'Sample 5 Status',
-      'Final Result',
-      'Measured By',
-      'Measurement Date',
-      'Overall Measured Value',
-      'Unit',
-      'Notes'
-    ];
-
-    // Format date properly
-    const formatDate = (dateString) => {
-      if (!dateString) return '';
-      try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US') + ' ' + date.toLocaleTimeString('en-US', { hour12: false });
-      } catch (e) {
-        return dateString;
-      }
-    };
-
-    // Clean and format measured by field
-    const formatMeasuredBy = (measuredBy) => {
-      if (typeof measuredBy === 'object' && measuredBy?.firstName && measuredBy?.lastName) {
-        return `${measuredBy.firstName} ${measuredBy.lastName}`;
-      }
-      return measuredBy || '';
-    };
-
-    // Clean notes field
-    const formatNotes = (notes) => {
-      if (!notes) return '';
-      return String(notes).replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
-    };
-
-    const rows = [
-      report.id || '',
-      report.cocId || '',
-      report.jobId || '',
-      report.checkType || '',
-      report.checkDescription || '',
-      report.parameter || '',
-      report.specification || '',
-      report.tolerance || '',
-      report.sample1?.value || '',
-      report.sample1?.status || '',
-      report.sample2?.value || '',
-      report.sample2?.status || '',
-      report.sample3?.value || '',
-      report.sample3?.status || '',
-      report.sample4?.value || '',
-      report.sample4?.status || '',
-      report.sample5?.value || '',
-      report.sample5?.status || '',
-      report.result || '',
-      formatMeasuredBy(report.MeasuredBy || report.measuredBy),
-      formatDate(report.measurementDate),
-      report.measuredValue || '',
-      report.unit || '',
-      formatNotes(report.notes)
-    ];
-
-    // Escape and wrap values that contain commas, quotes, or newlines
-    const escapeCSVValue = (value) => {
-      if (value === null || value === undefined) return '';
-      const stringValue = String(value);
-      // Always wrap values in quotes for consistent alignment
-      return `"${stringValue.replace(/"/g, '""')}"`;
-    };
-
-    const csvRows = [
-      headers.map(escapeCSVValue).join(','),
-      rows.map(escapeCSVValue).join(',')
-    ];
-
-    // Add UTF-8 BOM for better Excel compatibility
-    return '\uFEFF' + csvRows.join('\n');
-  };
+  // Simply reference the PDF export function
+  const handleExportReport = handleExportReportPDF;
 
   const handleExportAllPDF = async () => {
     try {
@@ -330,158 +213,8 @@ const DimensionReport = () => {
     }
   };
 
-  const handleExportAll = async () => {
-    try {
-      if (filteredReports.length === 0) {
-        toast.error('No reports to export');
-        return;
-      }
-
-      // Use backend CSV export for better alignment and formatting
-      const response = await fetch('/api/dimension-reports/export/csv', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to export reports');
-      }
-
-      // Get the CSV content as blob
-      const blob = await response.blob();
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `dimension_reports_all_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      toast.success(`Exported ${filteredReports.length} reports successfully`);
-    } catch (error) {
-      console.error('Export error:', error);
-      
-      // Fallback to client-side export if backend fails
-      console.log('Falling back to client-side export...');
-      
-      // Generate CSV content for all reports (client-side fallback)
-      const headers = [
-        'Report ID',
-        'COC ID', 
-        'Job ID',
-        'Check Type',
-        'Check Description',
-        'Parameter',
-        'Specification',
-        'Tolerance',
-        'Sample 1 Value',
-        'Sample 1 Status',
-        'Sample 2 Value', 
-        'Sample 2 Status',
-        'Sample 3 Value',
-        'Sample 3 Status', 
-        'Sample 4 Value',
-        'Sample 4 Status',
-        'Sample 5 Value',
-        'Sample 5 Status',
-        'Final Result',
-        'Measured By',
-        'Measurement Date',
-        'Overall Measured Value',
-        'Unit',
-        'Notes'
-      ];
-
-      // Format date properly
-      const formatDate = (dateString) => {
-        if (!dateString) return '';
-        try {
-          const date = new Date(dateString);
-          return date.toLocaleDateString('en-US') + ' ' + date.toLocaleTimeString('en-US', { hour12: false });
-        } catch (e) {
-          return dateString;
-        }
-      };
-
-      // Clean and format measured by field
-      const formatMeasuredBy = (measuredBy) => {
-        if (typeof measuredBy === 'object' && measuredBy?.firstName && measuredBy?.lastName) {
-          return `${measuredBy.firstName} ${measuredBy.lastName}`;
-        }
-        return measuredBy || '';
-      };
-
-      // Clean notes field
-      const formatNotes = (notes) => {
-        if (!notes) return '';
-        return String(notes).replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
-      };
-
-      // Escape and wrap all values consistently
-      const escapeCSVValue = (value) => {
-        if (value === null || value === undefined) return '""';
-        const stringValue = String(value);
-        // Always wrap values in quotes for consistent alignment
-        return `"${stringValue.replace(/"/g, '""')}"`;
-      };
-
-      const csvRows = [headers.map(escapeCSVValue).join(',')];
-      
-      filteredReports.forEach(report => {
-        const rows = [
-          report.id || '',
-          report.cocId || '',
-          report.jobId || '',
-          report.checkType || '',
-          report.checkDescription || '',
-          report.parameter || '',
-          report.specification || '',
-          report.tolerance || '',
-          report.sample1?.value || '',
-          report.sample1?.status || '',
-          report.sample2?.value || '',
-          report.sample2?.status || '',
-          report.sample3?.value || '',
-          report.sample3?.status || '',
-          report.sample4?.value || '',
-          report.sample4?.status || '',
-          report.sample5?.value || '',
-          report.sample5?.status || '',
-          report.result || '',
-          formatMeasuredBy(report.MeasuredBy || report.measuredBy),
-          formatDate(report.measurementDate),
-          report.measuredValue || '',
-          report.unit || '',
-          formatNotes(report.notes)
-        ];
-        csvRows.push(rows.map(escapeCSVValue).join(','));
-      });
-
-      // Add UTF-8 BOM for better Excel compatibility
-      const csvContent = '\uFEFF' + csvRows.join('\n');
-      
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `dimension_reports_all_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      toast.success(`Exported ${filteredReports.length} reports successfully (fallback mode)`);
-    }
-  };
+  // Simply reference the PDF export function
+  const handleExportAll = handleExportAllPDF;
 
   if (loading) {
     return <div className="loading">Loading dimension reports...</div>;
@@ -495,21 +228,12 @@ const DimensionReport = () => {
           <div className="export-buttons">
             <button 
               className="btn btn-secondary"
-              onClick={handleExportAll}
-              disabled={filteredReports.length === 0}
-              title="Export to CSV"
-            >
-              <Download size={20} />
-              CSV ({filteredReports.length})
-            </button>
-            <button 
-              className="btn btn-secondary"
               onClick={handleExportAllPDF}
               disabled={filteredReports.length === 0}
               title="Export to PDF"
             >
               <Download size={20} />
-              PDF ({filteredReports.length})
+              Export to PDF ({filteredReports.length})
             </button>
           </div>
           <button 
@@ -552,8 +276,8 @@ const DimensionReport = () => {
               <div className="card-actions">
                 <button 
                   className="btn-icon export-btn"
-                  onClick={() => handleExportReport(report)}
-                  title="Export CSV"
+                  onClick={() => handleExportReportPDF(report)}
+                  title="Export PDF"
                 >
                   <Download size={16} />
                 </button>
@@ -1010,8 +734,12 @@ const DimensionReport = () => {
         }
 
         .btn-icon.export-btn:hover {
-          background: #e8f5e9;
-          color: #2e7d32;
+          background: #e3f2fd;
+          color: #1976d2;
+        }
+
+        .btn-icon.export-btn {
+          color: #1976d2;
         }
 
         .btn-icon.delete-btn:hover {

@@ -361,7 +361,7 @@ router.get('/party-analysis', auth, checkAnalyticsPermission, async (req, res) =
         creditLimit: party.creditLimit,
         creditUtilization: party.creditLimit > 0 ? ((totalRevenue / party.creditLimit) * 100).toFixed(2) : 0,
         overdueCount: overdueOrders.length,
-        riskScore: this.calculateRiskScore(party, orders, overdueOrders)
+        riskScore: calculateRiskScore(party, orders, overdueOrders)
       };
     });
 

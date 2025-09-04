@@ -160,141 +160,47 @@ router.get('/image/:filename', (req, res) => {
   }
 });
 
-// Export dimension reports to CSV
-router.get('/export/csv', auth, async (req, res) => {
-  try {
-    const dimensionReports = await DimensionReport.findAll({
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: require('../models').User,
-          as: 'MeasuredBy',
-          attributes: ['id', 'firstName', 'lastName']
-        }
-      ]
-    });
 
-    // CSV Headers
-    const headers = [
-      'Report ID',
-      'COC ID', 
-      'Job ID',
-      'Check Type',
-      'Check Description',
-      'Parameter',
-      'Specification',
-      'Tolerance',
-      'Sample 1 Value',
-      'Sample 1 Status',
-      'Sample 2 Value', 
-      'Sample 2 Status',
-      'Sample 3 Value',
-      'Sample 3 Status', 
-      'Sample 4 Value',
-      'Sample 4 Status',
-      'Sample 5 Value',
-      'Sample 5 Status',
-      'Final Result',
-      'Measured By',
-      'Measurement Date',
-      'Notes'
-    ];
-
-    // Helper functions for formatting
-    const formatDate = (dateString) => {
-      if (!dateString) return '';
-      try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US') + ' ' + date.toLocaleTimeString('en-US', { hour12: false });
-      } catch (e) {
-        return '';
-      }
-    };
-
-    const formatMeasuredBy = (user) => {
-      if (user && user.firstName && user.lastName) {
-        return `${user.firstName} ${user.lastName}`;
-      }
-      return '';
-    };
-
-    const formatNotes = (notes) => {
-      if (!notes) return '';
-      return String(notes).replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
-    };
-
-    const escapeCSVValue = (value) => {
-      if (value === null || value === undefined) return '""';
-      const stringValue = String(value);
-      // Always wrap values in quotes for consistent alignment
-      return `"${stringValue.replace(/"/g, '""')}"`;
-    };
-
-    // Build CSV content
-    const csvRows = [headers.map(escapeCSVValue).join(',')];
-    
-    dimensionReports.forEach(report => {
-      const rows = [
-        report.id || '',
-        report.cocId || '',
-        report.jobId || '',
-        report.checkType || '',
-        report.checkDescription || '',
-        report.checkDescription || '', // parameter field
-        report.specification || '',
-        report.tolerance || '',
-        report.sample1?.value || '',
-        report.sample1?.status || '',
-        report.sample2?.value || '',
-        report.sample2?.status || '',
-        report.sample3?.value || '',
-        report.sample3?.status || '',
-        report.sample4?.value || '',
-        report.sample4?.status || '',
-        report.sample5?.value || '',
-        report.sample5?.status || '',
-        report.result || '',
-        formatMeasuredBy(report.MeasuredBy),
-        formatDate(report.measurementDate),
-        formatNotes(report.notes)
-      ];
-      csvRows.push(rows.map(escapeCSVValue).join(','));
-    });
-
-    // Add UTF-8 BOM for better Excel compatibility
-    const csvContent = '\uFEFF' + csvRows.join('\n');
-
-    // Set headers for file download
-    const filename = `dimension_reports_${new Date().toISOString().split('T')[0]}.csv`;
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Pragma', 'no-cache');
-
-    res.send(csvContent);
-
-  } catch (error) {
-    console.error('Error exporting dimension reports to CSV:', error);
-    res.status(500).json({
-      message: 'Internal server error',
-      error: error.message
-    });
-  }
-});
 
 // Export dimension reports to PDF
 router.get('/export/pdf', auth, async (req, res) => {
   try {
-    const dimensionReports = await DimensionReport.findAll({
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: require('../models').User,
-          as: 'MeasuredBy',
-          attributes: ['id', 'firstName', 'lastName']
-        }
-      ]
-    });
+    // Check if specific reportId is provided
+    const { reportId } = req.query;
+    let dimensionReports = [];
+    
+    if (reportId) {
+      // Get single report
+      const report = await DimensionReport.findByPk(reportId, {
+        include: [
+          {
+            model: require('../models').User,
+            as: 'MeasuredBy',
+            attributes: ['id', 'firstName', 'lastName']
+          }
+        ]
+      });
+      
+      if (!report) {
+        return res.status(404).json({
+          message: 'Report not found'
+        });
+      }
+      
+      dimensionReports = [report];
+    } else {
+      // Get all reports
+      dimensionReports = await DimensionReport.findAll({
+        order: [['createdAt', 'DESC']],
+        include: [
+          {
+            model: require('../models').User,
+            as: 'MeasuredBy',
+            attributes: ['id', 'firstName', 'lastName']
+          }
+        ]
+      });
+    }
 
     // Create a new PDF document
     const doc = new PDFDocument({
@@ -336,10 +242,14 @@ router.get('/export/pdf', auth, async (req, res) => {
       return String(notes).replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
     };
 
-    // Add title and header
-    doc.fontSize(20).font('Helvetica-Bold').text('Dimension Reports', { align: 'center' });
+    // Add title and header with improved styling
+    doc.fontSize(24).font('Helvetica-Bold').text('Dimension Reports', { align: 'center' });
+    doc.moveDown(0.5);
     doc.fontSize(12).font('Helvetica').text(`Generated on: ${new Date().toLocaleDateString('en-US')}`, { align: 'center' });
     doc.text(`Total Reports: ${dimensionReports.length}`, { align: 'center' });
+    
+    // Add company logo placeholder
+    doc.fontSize(10).text('Engineering Excellence Enterprises', { align: 'center' });
     doc.moveDown(2);
 
     // Table configuration
@@ -360,9 +270,17 @@ router.get('/export/pdf', auth, async (req, res) => {
 
     let currentY = tableTop;
 
-    // Draw table headers
+    // Draw table headers with improved styling
     doc.fontSize(10).font('Helvetica-Bold');
     let currentX = tableLeft;
+    
+    // Set header background color
+    doc.fillColor('#f0f0f0');
+    doc.rect(tableLeft, currentY, 
+             colWidths.cocId + colWidths.jobId + colWidths.checkType + colWidths.description + 
+             colWidths.specification + colWidths.samples + colWidths.result + 
+             colWidths.measuredBy + colWidths.date, rowHeight).fill();
+    doc.fillColor('black');
     
     // Header row
     doc.rect(currentX, currentY, colWidths.cocId, rowHeight).stroke();

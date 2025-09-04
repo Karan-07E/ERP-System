@@ -37,7 +37,7 @@ const Analytics = () => {
     if (activeTab === 'gst') fetchGSTData();
     if (activeTab === 'jobs') fetchJobAnalytics();
     if (activeTab === 'parties') fetchPartyAnalysis();
-  }, [activeTab, dateRange, fetchGSTData, fetchJobAnalytics, fetchPartyAnalysis]);
+  }, [activeTab, dateRange]);
 
   const fetchDashboardData = async () => {
     setLoading(true);

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from '../api/config';
 import toast from 'react-hot-toast';
+import { getValidToken } from '../utils/tokenUtils';
 
 const AuthContext = createContext();
 
@@ -22,11 +23,20 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem('token');
+      // Get token and check if it's valid (not expired)
+      const token = getValidToken();
+      
       if (token) {
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        const response = await axios.get('/auth/me');
-        setUser(response.data.user);
+        // Verify with the server
+        const response = await axios.get('/auth/verify');
+        if (response.data.valid) {
+          setUser(response.data.user);
+        }
+      } else {
+        // If token doesn't exist or is expired, clear it
+        localStorage.removeItem('token');
+        delete axios.defaults.headers.common['Authorization'];
       }
     } catch (error) {
       console.error('Auth check failed:', error);
