@@ -14,6 +14,7 @@ import {
   Download,
   BarChart3
 } from 'lucide-react';
+import { usePartyContext } from '../contexts/PartyContext';
 
 const Accounting = () => {
   const [activeTab, setActiveTab] = useState('parties');
@@ -25,8 +26,17 @@ const Accounting = () => {
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Data states
-  const [parties, setParties] = useState([]);
+  // Access parties from context
+  const { 
+    parties, 
+    error: partyError,
+    createParty,
+    updateParty,
+    deleteParty,
+    refreshParties
+  } = usePartyContext();
+  
+  // Other data states
   const [invoices, setInvoices] = useState([]);
   const [quotations, setQuotations] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -38,8 +48,7 @@ const Accounting = () => {
       
       switch (activeTab) {
         case 'parties':
-          const partiesResponse = await axios.get('/api/parties');
-          setParties(partiesResponse.data.parties || []);
+          // We don't need to fetch parties here as they come from PartyContext
           break;
         case 'invoices':
           const invoicesResponse = await axios.get('/api/accounting/invoices');
@@ -113,10 +122,13 @@ const Accounting = () => {
     if (window.confirm(`Are you sure you want to delete this ${activeTab.slice(0, -1)}?`)) {
       try {
         if (activeTab === 'parties') {
-          const response = await axios.delete(`/api/parties/${item.id}`);
-          if (response.data.success) {
+          // Use PartyContext's deleteParty function
+          const result = await deleteParty(item.id);
+          if (result.success) {
             alert('Party deleted successfully!');
-            await fetchData(); // Refresh the data
+            refreshParties();
+          } else {
+            alert(`Error: ${result.error}`);
           }
         } else {
           // Remove item from state (in real app, would call API)
@@ -144,20 +156,24 @@ const Accounting = () => {
     try {
       if (activeTab === 'parties') {
         if (modalType === 'create') {
-          const response = await axios.post('/api/parties', formData);
-          if (response.data.success) {
+          const result = await createParty(formData);
+          if (result.success) {
             alert('Party created successfully!');
             setShowModal(false);
-            await fetchData(); // Refresh the data
             setFormData({});
+            refreshParties();
+          } else {
+            alert(`Error: ${result.error}`);
           }
         } else if (modalType === 'edit') {
-          const response = await axios.put(`/api/parties/${selectedItem.id}`, formData);
-          if (response.data.success) {
+          const result = await updateParty(selectedItem.id, formData);
+          if (result.success) {
             alert('Party updated successfully!');
             setShowModal(false);
-            await fetchData(); // Refresh the data
             setFormData({});
+            refreshParties();
+          } else {
+            alert(`Error: ${result.error}`);
           }
         }
       } else {

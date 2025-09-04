@@ -10,10 +10,20 @@ import {
   X
 } from 'lucide-react';
 import api from '../api/config';
+import { usePartyContext } from '../contexts/PartyContext';
 
 const Parties = () => {
-  const [parties, setParties] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { 
+    parties, 
+    loading, 
+    error: partyError, 
+    fetchParties,
+    createParty,
+    updateParty,
+    deleteParty,
+    refreshParties
+  } = usePartyContext();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -264,8 +274,24 @@ const Parties = () => {
       return;
     }
     
-    fetchParties();
-  }, [currentPage, debouncedSearchTerm, filterType]);
+    const params = {
+      page: currentPage,
+      limit: 20,
+      ...(debouncedSearchTerm && { search: debouncedSearchTerm }),
+      ...(filterType !== 'all' && { type: filterType })
+    };
+    
+    // Call fetchParties from context and get pagination data
+    fetchParties(params)
+      .then(result => {
+        if (result && result.data && result.data.pagination) {
+          setTotalPages(result.data.pagination.pages || 1);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching parties with pagination:', err);
+      });
+  }, [currentPage, debouncedSearchTerm, filterType, fetchParties]);
 
   // Ensure selectedParty is null when opening add modal
   useEffect(() => {
@@ -274,39 +300,7 @@ const Parties = () => {
     }
   }, [showAddModal]);
 
-  const fetchParties = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const params = new URLSearchParams({
-        page: currentPage,
-        limit: 20,
-        isActive: 'true', // Only fetch active parties
-        ...(debouncedSearchTerm && { search: debouncedSearchTerm }),
-        ...(filterType !== 'all' && { type: filterType })
-      });
-
-      console.log('Fetching parties with params:', params.toString());
-      const response = await api.get(`/parties?${params}`);
-      console.log('Fetch parties response:', response.data);
-      
-      if (response.data.success) {
-        setParties(response.data.data.parties || []);
-        setTotalPages(response.data.data.pagination?.pages || 1);
-      } else {
-        setError('Failed to fetch parties');
-        setParties([]);
-      }
-    } catch (error) {
-      console.error('Error fetching parties:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch parties';
-      setError(errorMessage);
-      setParties([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Using context's fetchParties instead of local function
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -324,28 +318,32 @@ const Parties = () => {
       console.log('Submitting form data:', formData);
       
       if (selectedParty) {
-        // Update party
+        // Update party using context
         console.log('Updating party with ID:', selectedParty.id);
-        const response = await api.put(`/parties/${selectedParty.id}`, formData);
-        console.log('Update response:', response.data);
+        const result = await updateParty(selectedParty.id, formData);
         
-        if (response.data.success) {
+        if (result.success) {
           setShowEditModal(false);
-          await fetchParties();
           resetForm();
           alert('Party updated successfully!');
+          refreshParties();
+        } else {
+          setError(result.error);
+          alert(`Error: ${result.error}`);
         }
       } else {
-        // Create party
+        // Create party using context
         console.log('Creating new party...');
-        const response = await api.post('/parties', formData);
-        console.log('Create response:', response.data);
+        const result = await createParty(formData);
         
-        if (response.data.success) {
+        if (result.success) {
           setShowAddModal(false);
-          await fetchParties();
           resetForm();
           alert('Party created successfully!');
+          refreshParties();
+        } else {
+          setError(result.error);
+          alert(`Error: ${result.error}`);
         }
       }
     } catch (error) {
@@ -372,12 +370,17 @@ const Parties = () => {
   const handleDelete = async (partyId) => {
     if (window.confirm('Are you sure you want to deactivate this party?')) {
       try {
-        const response = await api.delete(`/parties/${partyId}`);
-        if (response.data.success) {
-          fetchParties();
+        const result = await deleteParty(partyId);
+        if (result.success) {
+          alert('Party deactivated successfully!');
+          refreshParties();
+        } else {
+          setError(result.error);
+          alert(`Error: ${result.error}`);
         }
       } catch (error) {
         console.error('Error deleting party:', error);
+        setError('Failed to delete party: ' + error.message);
       }
     }
   };
@@ -416,7 +419,14 @@ const Parties = () => {
     }
   };
 
-  if (loading && parties.length === 0) {
+  // Use partyError from context if available
+  useEffect(() => {
+    if (partyError) {
+      setError(partyError);
+    }
+  }, [partyError]);
+
+  if (loading && (!parties || parties.length === 0)) {
     return (
       <div className="loading-container">
         <div className="loading-wrapper">

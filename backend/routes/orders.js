@@ -586,6 +586,26 @@ router.post('/simple', async (req, res) => {
         ? `PO-${Date.now()}`
         : `QUO-${Date.now()}`;
 
+    // Get party information if partyId is provided
+    let partyInfo = { name: 'Demo Party' };
+    if (req.body.partyId) {
+      try {
+        // Try to find the party in the database
+        const { Party } = require('../models');
+        const party = await Party.findByPk(req.body.partyId);
+        if (party) {
+          partyInfo = {
+            id: party.id,
+            name: party.name,
+            city: party.city || '',
+            type: party.type
+          };
+        }
+      } catch (partyError) {
+        console.log('Party fetch error (non-critical):', partyError.message);
+      }
+    }
+
     // For demo purposes, return a mock response instead of creating in DB
     // to avoid complexity with required references
     const mockOrder = {
@@ -594,7 +614,9 @@ router.post('/simple', async (req, res) => {
       type: req.body.type || 'sales_order',
       status: 'draft',
       priority: req.body.priority || 'medium',
-      notes: `Customer: ${req.body.customer || 'Demo Customer'}`,
+      partyId: req.body.partyId,
+      partyInfo,
+      notes: `${req.body.type === 'sales_order' ? 'Customer' : 'Vendor'}: ${partyInfo.name}`,
       description: req.body.description || '',
       createdAt: new Date()
     };

@@ -100,22 +100,31 @@ const Orders = () => {
 
   const loadCustomersAndVendors = async () => {
     try {
-      // Load customers and vendors from backend
-      const [customersResponse, vendorsResponse] = await Promise.all([
-        axios.get('/api/accounting/customers/demo/list'),
-        axios.get('/api/accounting/vendors/demo/list')
-      ]);
+      // Load parties from unified party API
+      const partiesResponse = await axios.get('/api/parties');
       
-      setCustomers(customersResponse.data.customers || []);
-      setVendors(vendorsResponse.data.vendors || []);
+      if (partiesResponse.data.success) {
+        const allParties = partiesResponse.data.data.parties || [];
+        
+        // Filter parties by type
+        const customersList = allParties.filter(party => party.type === 'customer');
+        const vendorsList = allParties.filter(party => party.type === 'vendor');
+        
+        console.log('Loaded parties:', { customers: customersList.length, vendors: vendorsList.length });
+        
+        setCustomers(customersList);
+        setVendors(vendorsList);
+      } else {
+        throw new Error('Failed to load parties data');
+      }
     } catch (error) {
-      console.error('Error loading customers and vendors:', error);
+      console.error('Error loading parties:', error);
       // Fallback to mock data
       setCustomers([
-        { _id: 'c1', name: 'Demo Customer', companyName: 'Demo Corp' }
+        { id: 'c1', name: 'Demo Customer', companyName: 'Demo Corp' }
       ]);
       setVendors([
-        { _id: 'v1', name: 'Demo Vendor', companyName: 'Demo Supplies' }
+        { id: 'v1', name: 'Demo Vendor', companyName: 'Demo Supplies' }
       ]);
     }
   };
@@ -197,23 +206,33 @@ const Orders = () => {
       if (modalType === 'create') {
         // Create new order
         const endpoint = '/api/orders/simple';
+        
+        // Determine which party ID to use based on order type
+        const partyId = formData.type === 'sales_order' ? formData.customer : formData.vendor;
+        
         const payload = {
           type: formData.type,
-          customer: formData.customer,
-          vendor: formData.vendor,
+          partyId: partyId, // Send a single partyId instead of separate customer/vendor
           priority: formData.priority,
           description: formData.notes
         };
 
+        console.log('Creating order with payload:', payload);
         const response = await axios.post(endpoint, payload);
         
+        // Find the selected party
+        const selectedParty = formData.type === 'sales_order' 
+          ? customers.find(c => c.id === formData.customer) 
+          : vendors.find(v => v.id === formData.vendor);
+          
         // Add to local state for demo
         const newOrder = {
           _id: `new-${Date.now()}`,
           orderNumber: response.data.order?.orderNumber || `${formData.type === 'sales_order' ? 'SO' : 'PO'}-${Date.now()}`,
           type: formData.type,
-          customer: customers.find(c => c._id === formData.customer),
-          vendor: vendors.find(v => v._id === formData.vendor),
+          // Set customer or vendor based on order type
+          customer: formData.type === 'sales_order' ? selectedParty : null,
+          vendor: formData.type === 'purchase_order' ? selectedParty : null,
           status: 'draft',
           priority: formData.priority,
           orderDate: new Date(),
@@ -621,8 +640,8 @@ const Orders = () => {
                         >
                           <option value="">Select Customer</option>
                           {customers.map(customer => (
-                            <option key={customer._id} value={customer._id}>
-                              {customer.name} - {customer.companyName}
+                            <option key={customer.id} value={customer.id}>
+                              {customer.name} {customer.city ? `- ${customer.city}` : ''}
                             </option>
                           ))}
                         </select>
@@ -640,8 +659,8 @@ const Orders = () => {
                         >
                           <option value="">Select Vendor</option>
                           {vendors.map(vendor => (
-                            <option key={vendor._id} value={vendor._id}>
-                              {vendor.name} - {vendor.companyName}
+                            <option key={vendor.id} value={vendor.id}>
+                              {vendor.name} {vendor.city ? `- ${vendor.city}` : ''}
                             </option>
                           ))}
                         </select>
