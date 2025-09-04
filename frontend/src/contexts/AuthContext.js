@@ -26,8 +26,10 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     // Only set up the listener if the user is logged in
     if (user) {
+      console.log('Setting up tab close detection for user:', user.email || user.username);
+      
       const cleanup = setupTabCloseListener(() => {
-        console.log('Tab was previously closed. Logging out...');
+        console.log('Tab session change detected. Performing automatic logout...');
         logout(false); // Silent logout without toast notification
       });
       
@@ -38,6 +40,9 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
+      // Check for tab close indicator first
+      checkForTabClose();
+      
       // Get token and check if it's valid (not expired)
       const token = getValidToken();
       
@@ -59,6 +64,29 @@ export const AuthProvider = ({ children }) => {
       delete axios.defaults.headers.common['Authorization'];
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Additional check for detecting tab close/reopen scenarios
+  const checkForTabClose = () => {
+    try {
+      // Compare sessionStorage (tab-specific) with localStorage (persists across tabs)
+      const authSessionId = sessionStorage.getItem('authSessionId');
+      const storedSessionId = localStorage.getItem('authSessionId');
+      
+      // If we have a stored ID but no session ID, it means we're in a new tab session
+      if (storedSessionId && !authSessionId) {
+        console.log('New tab session detected. Clearing previous authentication.');
+        localStorage.removeItem('token');
+        localStorage.removeItem('authSessionId');
+      } else {
+        // Set/update the session identifier
+        const newSessionId = Date.now().toString();
+        sessionStorage.setItem('authSessionId', newSessionId);
+        localStorage.setItem('authSessionId', newSessionId);
+      }
+    } catch (e) {
+      console.warn('Session check error:', e);
     }
   };
 
