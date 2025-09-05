@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 const Orders = () => {
-  const [activeTab, setActiveTab] = useState('sales');
+  const [activeTab, setActiveTab] = useState('orders');
   const [orders, setOrders] = useState([]);
   const [jobCards, setJobCards] = useState([]);
   const [deliveryNotes, setDeliveryNotes] = useState([]);
@@ -100,8 +100,11 @@ const Orders = () => {
 
   const loadCustomersAndVendors = async () => {
     try {
+      console.log('Fetching parties from API...');
       // Load parties from unified party API
       const partiesResponse = await axios.get('/api/parties');
+      
+      console.log('Parties API response:', partiesResponse.data);
       
       if (partiesResponse.data.success) {
         const allParties = partiesResponse.data.data.parties || [];
@@ -110,7 +113,13 @@ const Orders = () => {
         const customersList = allParties.filter(party => party.type === 'customer');
         const vendorsList = allParties.filter(party => party.type === 'vendor');
         
-        console.log('Loaded parties:', { customers: customersList.length, vendors: vendorsList.length });
+        console.log('Loaded parties:', { 
+          total: allParties.length,
+          customers: customersList.length, 
+          vendors: vendorsList.length,
+          customerSample: customersList.length > 0 ? customersList[0] : null,
+          vendorSample: vendorsList.length > 0 ? vendorsList[0] : null
+        });
         
         setCustomers(customersList);
         setVendors(vendorsList);
@@ -119,21 +128,28 @@ const Orders = () => {
       }
     } catch (error) {
       console.error('Error loading parties:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      
       // Fallback to mock data
-      setCustomers([
-        { id: 'c1', name: 'Demo Customer', companyName: 'Demo Corp' }
-      ]);
-      setVendors([
-        { id: 'v1', name: 'Demo Vendor', companyName: 'Demo Supplies' }
-      ]);
+      const mockCustomers = [
+        { id: 'c1', name: 'Demo Customer', city: 'Demo City' }
+      ];
+      const mockVendors = [
+        { id: 'v1', name: 'Demo Vendor', city: 'Demo City' }
+      ];
+      
+      console.log('Using fallback mock data:', { customers: mockCustomers, vendors: mockVendors });
+      
+      setCustomers(mockCustomers);
+      setVendors(mockVendors);
     }
   };
 
-  const handleCreateOrder = (type) => {
+  const handleCreateOrder = () => {
     setModalType('create');
     setSelectedOrder(null);
     setFormData({
-      type: type === 'sales' ? 'sales_order' : 'purchase_order',
+      type: 'sales_order', // Default to sales order, user can change in the form
       customer: '',
       vendor: '',
       priority: 'medium',
@@ -210,6 +226,13 @@ const Orders = () => {
         // Determine which party ID to use based on order type
         const partyId = formData.type === 'sales_order' ? formData.customer : formData.vendor;
         
+        // Ensure we have a valid party ID
+        if (!partyId && formData.type === 'sales_order') {
+          throw new Error('Please select a customer');
+        } else if (!partyId && formData.type === 'purchase_order') {
+          throw new Error('Please select a vendor');
+        }
+        
         const payload = {
           type: formData.type,
           partyId: partyId, // Send a single partyId instead of separate customer/vendor
@@ -218,33 +241,53 @@ const Orders = () => {
         };
 
         console.log('Creating order with payload:', payload);
-        const response = await axios.post(endpoint, payload);
         
-        // Find the selected party
-        const selectedParty = formData.type === 'sales_order' 
-          ? customers.find(c => c.id === formData.customer) 
-          : vendors.find(v => v.id === formData.vendor);
+        try {
+          const response = await axios.post(endpoint, payload);
+          console.log('Order creation response:', response.data);
           
-        // Add to local state for demo
-        const newOrder = {
-          _id: `new-${Date.now()}`,
-          orderNumber: response.data.order?.orderNumber || `${formData.type === 'sales_order' ? 'SO' : 'PO'}-${Date.now()}`,
-          type: formData.type,
-          // Set customer or vendor based on order type
-          customer: formData.type === 'sales_order' ? selectedParty : null,
-          vendor: formData.type === 'purchase_order' ? selectedParty : null,
-          status: 'draft',
-          priority: formData.priority,
-          orderDate: new Date(),
-          expectedDeliveryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-          grandTotal: 0,
-          items: [],
-          notes: formData.notes
-        };
-        
-        setOrders(prev => [newOrder, ...prev]);
-        alert('Order created successfully!');
-        
+          // Find the selected party
+          const selectedParty = formData.type === 'sales_order' 
+            ? customers.find(c => c.id === formData.customer) 
+            : vendors.find(v => v.id === formData.vendor);
+            
+          // Add to local state for demo
+          const newOrder = {
+            _id: response.data.order?._id || `new-${Date.now()}`,
+            orderNumber: response.data.order?.orderNumber || `${formData.type === 'sales_order' ? 'SO' : 'PO'}-${Date.now()}`,
+            type: formData.type,
+            // Set customer or vendor based on order type
+            customer: formData.type === 'sales_order' ? selectedParty : null,
+            vendor: formData.type === 'purchase_order' ? selectedParty : null,
+            status: 'draft',
+            priority: formData.priority,
+            orderDate: new Date(),
+            expectedDeliveryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            grandTotal: 0,
+            items: [],
+            notes: formData.notes
+          };
+          
+          setOrders(prev => [newOrder, ...prev]);
+          alert('Order created successfully!');
+        } catch (apiError) {
+          console.error('API Error details:', apiError.response?.data || apiError.message);
+          
+          // More helpful error message based on the specific error
+          let errorMessage = 'Failed to create order. ';
+          
+          if (apiError.response?.status === 404) {
+            errorMessage += 'API endpoint not found. Please check your server configuration.';
+          } else if (apiError.response?.data?.message) {
+            errorMessage += apiError.response.data.message;
+          } else if (apiError.message.includes('Network Error')) {
+            errorMessage += 'Network error. Please check your internet connection or server status.';
+          } else {
+            errorMessage += apiError.message || 'Unknown error occurred.';
+          }
+          
+          throw new Error(errorMessage);
+        }
       } else if (modalType === 'edit') {
         // Update existing order
         const updatedOrders = orders.map(order => 
@@ -324,8 +367,7 @@ const Orders = () => {
     const matchesSearch = order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (order.customer?.name || order.vendor?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
-    const matchesTab = activeTab === 'sales' ? order.type === 'sales_order' : 
-                      activeTab === 'purchase' ? order.type === 'purchase_order' : true;
+    const matchesTab = activeTab === 'orders'; // Show orders only in the orders tab
     return matchesSearch && matchesStatus && matchesTab;
   });
 
@@ -345,18 +387,11 @@ const Orders = () => {
       {/* Navigation Tabs */}
       <div className="tabs">
         <button 
-          className={`tab ${activeTab === 'sales' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sales')}
+          className={`tab ${activeTab === 'orders' ? 'active' : ''}`}
+          onClick={() => setActiveTab('orders')}
         >
           <ShoppingCart size={18} />
-          Sales Orders
-        </button>
-        <button 
-          className={`tab ${activeTab === 'purchase' ? 'active' : ''}`}
-          onClick={() => setActiveTab('purchase')}
-        >
-          <Package size={18} />
-          Purchase Orders
+          Your Orders
         </button>
         <button 
           className={`tab ${activeTab === 'jobcards' ? 'active' : ''}`}
@@ -405,32 +440,36 @@ const Orders = () => {
         </div>
 
         <div className="action-buttons">
-          {(activeTab === 'sales' || activeTab === 'purchase') && (
+          {activeTab === 'orders' && (
             <button 
               className="btn btn-primary"
-              onClick={() => handleCreateOrder(activeTab)}
+              onClick={handleCreateOrder}
             >
               <Plus size={18} />
-              New {activeTab === 'sales' ? 'Sales' : 'Purchase'} Order
+              Create New Order
             </button>
           )}
         </div>
       </div>
 
       {/* Content based on active tab */}
-      {(activeTab === 'sales' || activeTab === 'purchase') && (
+      {activeTab === 'orders' && (
         <div className="orders-section">
+          <div className="section-header">
+            <h2>Your Orders</h2>
+            <p>Manage all sales and purchase orders in one place</p>
+          </div>
           <div className="orders-grid">
             {filteredOrders.length === 0 ? (
               <div className="empty-state">
                 <ShoppingCart size={48} />
                 <h3>No orders found</h3>
-                <p>Start by creating your first {activeTab} order</p>
+                <p>Start by creating your first order</p>
                 <button 
                   className="btn btn-primary"
-                  onClick={() => handleCreateOrder(activeTab)}
+                  onClick={handleCreateOrder}
                 >
-                  Create {activeTab === 'sales' ? 'Sales' : 'Purchase'} Order
+                  Create New Order
                 </button>
               </div>
             ) : (
@@ -459,7 +498,10 @@ const Orders = () => {
                   <div className="order-details">
                     <div className="detail-row">
                       <User size={14} />
-                      <span>{order.customer?.name || order.vendor?.name}</span>
+                      <span>
+                        {order.type === 'sales_order' ? '👤 Customer: ' : '🏭 Vendor: '}
+                        {order.customer?.name || order.vendor?.name}
+                      </span>
                     </div>
                     <div className="detail-row">
                       <Calendar size={14} />
@@ -468,6 +510,9 @@ const Orders = () => {
                     <div className="detail-row">
                       <span className={`priority-badge priority-${order.priority}`}>
                         {order.priority?.toUpperCase()}
+                      </span>
+                      <span className="order-type-badge">
+                        {order.type === 'sales_order' ? 'Sales Order' : 'Purchase Order'}
                       </span>
                     </div>
                   </div>
@@ -986,6 +1031,16 @@ const Orders = () => {
           font-size: 18px;
           font-weight: 600;
           color: #333;
+        }
+        
+        .order-type-badge {
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 600;
+          margin-left: 8px;
+          background-color: #e3f2fd;
+          color: #1565c0;
         }
 
         .status-select {

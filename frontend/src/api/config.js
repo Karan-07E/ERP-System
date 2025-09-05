@@ -5,7 +5,7 @@ import { getValidToken } from '../utils/tokenUtils';
 export const API_BASE_URL = process.env.REACT_APP_API_URL || (
   process.env.NODE_ENV === 'production' 
     ? 'https://eee111.onrender.com'
-    : '/api'
+    : ''  // Empty base URL for development
 );
 
 // Set default base URL
@@ -37,17 +37,46 @@ axios.interceptors.request.use((config) => {
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Error:', error.response?.data || error.message);
+    // Build a more detailed error log
+    const errorDetails = {
+      url: error.config?.url || 'unknown',
+      method: error.config?.method?.toUpperCase() || 'unknown',
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    };
     
-    // Handle authentication errors - only redirect if it's a token validation error
-    if (error.response?.status === 401 && 
-        error.response?.data?.message === 'Token is not valid') {
-      localStorage.removeItem('token');
-      
-      // Only redirect if we're not already on the login page
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+    console.error('API Error:', errorDetails);
+    
+    // Handle authentication errors
+    if (error.response?.status === 401) {
+      if (error.response?.data?.message === 'Token is not valid' || 
+          error.response?.data?.message === 'Token has expired') {
+        localStorage.removeItem('token');
+        
+        // Only redirect if we're not already on the login page
+        if (!window.location.pathname.includes('/login')) {
+          console.log('Authentication failed, redirecting to login');
+          window.location.href = '/login';
+        }
       }
+    }
+    
+    // Enhance error with more details for easier debugging
+    if (!error.isAxiosError) {
+      // This is likely a network error or CORS issue
+      const enhancedError = new Error(`Network Error: Cannot connect to ${error.config?.url || 'API'}`);
+      enhancedError.originalError = error;
+      return Promise.reject(enhancedError);
+    }
+    
+    // Add route not found handling
+    if (error.response?.status === 404) {
+      const enhancedError = new Error(`API Route Not Found: ${error.config.url}`);
+      enhancedError.originalError = error;
+      enhancedError.response = error.response;
+      return Promise.reject(enhancedError);
     }
     
     return Promise.reject(error);

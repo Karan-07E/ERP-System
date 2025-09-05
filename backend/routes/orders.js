@@ -4,7 +4,187 @@ const { Item } = require('../models/Accounting');
 const { Inventory } = require('../models/Inventory');
 const { auth, checkPermission } = require('../middleware/auth');
 const { validate, orderSchemas } = require('../middleware/validation');
+const { getModelSafely } = require('../utils/modelHelper');
 const router = express.Router();
+
+// IMPORTANT: Define all the demo/simple routes FIRST before any parameterized routes
+// to avoid Express interpreting 'simple' as a parameter
+
+// Simple create order endpoint (no auth for demo)
+router.post('/simple', async (req, res) => {
+  try {
+    console.log('Creating simple order:', req.body);
+    
+    // Generate order number based on type
+    const orderNumber = req.body.type === 'sales_order' 
+      ? `SO-${Date.now()}` 
+      : req.body.type === 'purchase_order' 
+        ? `PO-${Date.now()}`
+        : `QUO-${Date.now()}`;
+
+    // Get party information if partyId is provided
+    let partyInfo = { name: 'Demo Party' };
+    if (req.body.partyId) {
+      try {
+        console.log('Looking up party with ID:', req.body.partyId);
+        
+        // Try to find the party in the database using our helper
+        const party = await getModelSafely('Party', req.body.partyId);
+        if (party) {
+          partyInfo = {
+            id: party.id,
+            name: party.name,
+            city: party.city || '',
+            type: party.type
+          };
+          console.log('Party found:', partyInfo);
+        } else {
+          console.log('No party found with ID:', req.body.partyId);
+        }
+      } catch (partyError) {
+        console.log('Party fetch error (non-critical):', partyError.message);
+      }
+    }
+
+    // For demo purposes, return a mock response instead of creating in DB
+    // to avoid complexity with required references
+    const mockOrder = {
+      _id: `demo-order-${Date.now()}`,
+      orderNumber,
+      type: req.body.type || 'sales_order',
+      status: 'draft',
+      priority: req.body.priority || 'medium',
+      partyId: req.body.partyId,
+      partyInfo,
+      notes: `${req.body.type === 'sales_order' ? 'Customer' : 'Vendor'}: ${partyInfo.name}`,
+      description: req.body.description || '',
+      createdAt: new Date()
+    };
+
+    res.status(201).json({ 
+      message: 'Order created successfully', 
+      order: mockOrder
+    });
+  } catch (error) {
+    console.error('Create simple order error:', error);
+    res.status(500).json({ message: error.message || 'Failed to create order. Please try again.' });
+  }
+});
+
+// Simple create job card endpoint (no auth for demo)
+router.post('/job-cards/simple', async (req, res) => {
+  try {
+    console.log('Creating simple job card:', req.body);
+    
+    // For demo purposes, we'll just return a success response without actually creating in DB
+    // since JobCard has many required references that would be complex to set up
+    const jobCardNumber = `JC-${Date.now()}`;
+    
+    const mockJobCard = {
+      _id: `demo-${Date.now()}`,
+      jobCardNumber,
+      title: req.body.title || 'Demo Job Card',
+      description: req.body.description || 'Demo job card for testing',
+      status: 'assigned',
+      priority: req.body.priority || 'medium',
+      createdAt: new Date()
+    };
+
+    res.status(201).json({ 
+      message: 'Job card created successfully', 
+      jobCard: mockJobCard
+    });
+  } catch (error) {
+    console.error('Create simple job card error:', error);
+    res.status(500).json({ message: error.message || 'Failed to create job card. Please try again.' });
+  }
+});
+
+// Simple endpoints for demo (no auth required)
+router.get('/demo/list', async (req, res) => {
+  try {
+    const { type, status } = req.query;
+    
+    // Mock data for demo
+    const mockOrders = [
+      {
+        _id: 'so-001',
+        orderNumber: 'SO-001',
+        type: 'sales_order',
+        customer: { _id: 'c1', name: 'Acme Corp', companyName: 'Acme Corporation' },
+        status: 'confirmed',
+        priority: 'high',
+        orderDate: new Date('2025-08-01'),
+        expectedDeliveryDate: new Date('2025-08-15'),
+        grandTotal: 45000,
+        items: [{ item: { name: 'Product A' }, quantity: 10, unitPrice: 4500 }]
+      },
+      {
+        _id: 'so-002',
+        orderNumber: 'SO-002',
+        type: 'sales_order',
+        customer: { _id: 'c2', name: 'TechCorp', companyName: 'Tech Corporation' },
+        status: 'in_production',
+        priority: 'medium',
+        orderDate: new Date('2025-08-03'),
+        expectedDeliveryDate: new Date('2025-08-20'),
+        grandTotal: 67500,
+        items: [{ item: { name: 'Product B' }, quantity: 15, unitPrice: 4500 }]
+      },
+      {
+        _id: 'po-001',
+        orderNumber: 'PO-001',
+        type: 'purchase_order',
+        vendor: { _id: 'v1', name: 'Supplier Inc', companyName: 'Supplier Incorporated' },
+        status: 'pending',
+        priority: 'medium',
+        orderDate: new Date('2025-08-02'),
+        expectedDeliveryDate: new Date('2025-08-18'),
+        grandTotal: 25000,
+        items: [{ item: { name: 'Raw Material A' }, quantity: 100, unitPrice: 250 }]
+      }
+    ];
+    
+    let filteredOrders = mockOrders;
+    
+    if (type) {
+      filteredOrders = filteredOrders.filter(order => order.type === type);
+    }
+    
+    if (status && status !== 'all') {
+      filteredOrders = filteredOrders.filter(order => order.status === status);
+    }
+    
+    res.json({ 
+      orders: filteredOrders,
+      total: filteredOrders.length,
+      totalPages: 1,
+      currentPage: 1
+    });
+  } catch (error) {
+    console.error('Error fetching demo orders:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update order status endpoint (demo)
+router.put('/demo/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    console.log(`Updating order ${id} status to ${status}`);
+    
+    // In real implementation, this would update the database
+    res.json({ 
+      message: `Order ${id} status updated to ${status}`,
+      order: { _id: id, status }
+    });
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // ORDERS ROUTES
 // Get all orders
@@ -456,178 +636,6 @@ router.post('/delivery-challans', auth, checkPermission('orders', 'create'), asy
   } catch (error) {
     console.error('Create delivery challan error:', error);
     res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Simple create job card endpoint (no auth for demo)
-router.post('/job-cards/simple', async (req, res) => {
-  try {
-    console.log('Creating simple job card:', req.body);
-    
-    // For demo purposes, we'll just return a success response without actually creating in DB
-    // since JobCard has many required references that would be complex to set up
-    const jobCardNumber = `JC-${Date.now()}`;
-    
-    const mockJobCard = {
-      _id: `demo-${Date.now()}`,
-      jobCardNumber,
-      title: req.body.title || 'Demo Job Card',
-      description: req.body.description || 'Demo job card for testing',
-      status: 'assigned',
-      priority: req.body.priority || 'medium',
-      createdAt: new Date()
-    };
-
-    res.status(201).json({ 
-      message: 'Job card created successfully', 
-      jobCard: mockJobCard
-    });
-  } catch (error) {
-    console.error('Create simple job card error:', error);
-    res.status(500).json({ message: error.message || 'Failed to create job card. Please try again.' });
-  }
-});
-
-// Simple endpoints for demo (no auth required)
-router.get('/demo/list', async (req, res) => {
-  try {
-    const { type, status } = req.query;
-    
-    // Mock data for demo
-    const mockOrders = [
-      {
-        _id: 'so-001',
-        orderNumber: 'SO-001',
-        type: 'sales_order',
-        customer: { _id: 'c1', name: 'Acme Corp', companyName: 'Acme Corporation' },
-        status: 'confirmed',
-        priority: 'high',
-        orderDate: new Date('2025-08-01'),
-        expectedDeliveryDate: new Date('2025-08-15'),
-        grandTotal: 45000,
-        items: [{ item: { name: 'Product A' }, quantity: 10, unitPrice: 4500 }]
-      },
-      {
-        _id: 'so-002',
-        orderNumber: 'SO-002',
-        type: 'sales_order',
-        customer: { _id: 'c2', name: 'TechCorp', companyName: 'Tech Corporation' },
-        status: 'in_production',
-        priority: 'medium',
-        orderDate: new Date('2025-08-03'),
-        expectedDeliveryDate: new Date('2025-08-20'),
-        grandTotal: 67500,
-        items: [{ item: { name: 'Product B' }, quantity: 15, unitPrice: 4500 }]
-      },
-      {
-        _id: 'po-001',
-        orderNumber: 'PO-001',
-        type: 'purchase_order',
-        vendor: { _id: 'v1', name: 'Supplier Inc', companyName: 'Supplier Incorporated' },
-        status: 'pending',
-        priority: 'medium',
-        orderDate: new Date('2025-08-02'),
-        expectedDeliveryDate: new Date('2025-08-18'),
-        grandTotal: 25000,
-        items: [{ item: { name: 'Raw Material A' }, quantity: 100, unitPrice: 250 }]
-      }
-    ];
-    
-    let filteredOrders = mockOrders;
-    
-    if (type) {
-      filteredOrders = filteredOrders.filter(order => order.type === type);
-    }
-    
-    if (status && status !== 'all') {
-      filteredOrders = filteredOrders.filter(order => order.status === status);
-    }
-    
-    res.json({ 
-      orders: filteredOrders,
-      total: filteredOrders.length,
-      totalPages: 1,
-      currentPage: 1
-    });
-  } catch (error) {
-    console.error('Error fetching demo orders:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Update order status endpoint (demo)
-router.patch('/demo/:id/status', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-    
-    console.log(`Updating order ${id} status to ${status}`);
-    
-    // In real implementation, this would update the database
-    res.json({ 
-      message: `Order ${id} status updated to ${status}`,
-      order: { _id: id, status }
-    });
-  } catch (error) {
-    console.error('Error updating order status:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Simple create order endpoint (no auth for demo)
-router.post('/simple', async (req, res) => {
-  try {
-    console.log('Creating simple order:', req.body);
-    
-    // Generate order number based on type
-    const orderNumber = req.body.type === 'sales_order' 
-      ? `SO-${Date.now()}` 
-      : req.body.type === 'purchase_order' 
-        ? `PO-${Date.now()}`
-        : `QUO-${Date.now()}`;
-
-    // Get party information if partyId is provided
-    let partyInfo = { name: 'Demo Party' };
-    if (req.body.partyId) {
-      try {
-        // Try to find the party in the database
-        const { Party } = require('../models');
-        const party = await Party.findByPk(req.body.partyId);
-        if (party) {
-          partyInfo = {
-            id: party.id,
-            name: party.name,
-            city: party.city || '',
-            type: party.type
-          };
-        }
-      } catch (partyError) {
-        console.log('Party fetch error (non-critical):', partyError.message);
-      }
-    }
-
-    // For demo purposes, return a mock response instead of creating in DB
-    // to avoid complexity with required references
-    const mockOrder = {
-      _id: `demo-order-${Date.now()}`,
-      orderNumber,
-      type: req.body.type || 'sales_order',
-      status: 'draft',
-      priority: req.body.priority || 'medium',
-      partyId: req.body.partyId,
-      partyInfo,
-      notes: `${req.body.type === 'sales_order' ? 'Customer' : 'Vendor'}: ${partyInfo.name}`,
-      description: req.body.description || '',
-      createdAt: new Date()
-    };
-
-    res.status(201).json({ 
-      message: 'Order created successfully', 
-      order: mockOrder
-    });
-  } catch (error) {
-    console.error('Create simple order error:', error);
-    res.status(500).json({ message: error.message || 'Failed to create order. Please try again.' });
   }
 });
 
