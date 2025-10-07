@@ -1,4 +1,5 @@
 const express = require('express');
+const Joi = require('joi');
 const { Order, JobCard, DeliveryChallan } = require('../models/Order');
 const { Item } = require('../models/Accounting');
 const { Inventory } = require('../models/Inventory');
@@ -10,26 +11,74 @@ const router = express.Router();
 // IMPORTANT: Define all the demo/simple routes FIRST before any parameterized routes
 // to avoid Express interpreting 'simple' as a parameter
 
+// Simple order schema validation for the demo endpoint
+const simpleOrderSchema = Joi.object({
+  type: Joi.string().valid('sales_order', 'purchase_order').required(),
+  orderNumber: Joi.string().optional(), // Optional custom order number
+  partyId: Joi.string().optional(), // Made optional for demo mode
+  customer: Joi.string().optional(), // Added customer field
+  vendor: Joi.string().optional(), // Added vendor field
+  priority: Joi.string().valid('low', 'medium', 'high', 'urgent').default('medium'),
+  price: Joi.number().min(0).optional(), // Optional price field
+  description: Joi.string().optional(),
+  notes: Joi.string().optional() // Added notes field
+});
+
 // Simple create order endpoint (no auth for demo)
 router.post('/simple', async (req, res) => {
+  // Debug log to see what's being received
+  console.log('====== ORDER CREATION REQUEST ======');
+  console.log('Headers:', req.headers);
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.log('===================================');
+  
+  // Validate schema but catch validation errors
+  try {
+    const { error } = simpleOrderSchema.validate(req.body);
+    if (error) {
+      console.error('Order validation error:', error.details);
+      return res.status(400).json({
+        message: 'Validation error',
+        details: error.details.map(detail => detail.message)
+      });
+    }
+  } catch (validationError) {
+    console.error('Schema validation error:', validationError);
+  }
   try {
     console.log('Creating simple order:', req.body);
     
-    // Generate order number based on type
-    const orderNumber = req.body.type === 'sales_order' 
-      ? `SO-${Date.now()}` 
-      : req.body.type === 'purchase_order' 
-        ? `PO-${Date.now()}`
-        : `QUO-${Date.now()}`;
+    // Use custom order number if provided, otherwise generate one
+    const orderNumber = req.body.orderNumber 
+      ? req.body.orderNumber 
+      : req.body.type === 'sales_order' 
+        ? `SO-${Date.now()}` 
+        : req.body.type === 'purchase_order' 
+          ? `PO-${Date.now()}`
+          : `QUO-${Date.now()}`;
 
-    // Get party information if partyId is provided
+    // Get party information - check for partyId or customer/vendor
     let partyInfo = { name: 'Demo Party' };
-    if (req.body.partyId) {
+    let partyId = req.body.partyId;
+    
+    // If no direct partyId, try to use customer/vendor ID as fallback
+    if (!partyId) {
+      if (req.body.type === 'sales_order' && req.body.customer) {
+        partyId = req.body.customer;
+        console.log('Using customer ID as partyId:', partyId);
+      } else if (req.body.type === 'purchase_order' && req.body.vendor) {
+        partyId = req.body.vendor;
+        console.log('Using vendor ID as partyId:', partyId);
+      }
+    }
+    
+    // Try to fetch party data if we have any kind of ID
+    if (partyId) {
       try {
-        console.log('Looking up party with ID:', req.body.partyId);
+        console.log('Looking up party with ID:', partyId);
         
         // Try to find the party in the database using our helper
-        const party = await getModelSafely('Party', req.body.partyId);
+        const party = await getModelSafely('Party', partyId);
         if (party) {
           partyInfo = {
             id: party.id,
@@ -39,11 +88,13 @@ router.post('/simple', async (req, res) => {
           };
           console.log('Party found:', partyInfo);
         } else {
-          console.log('No party found with ID:', req.body.partyId);
+          console.log('No party found with ID:', partyId);
         }
       } catch (partyError) {
         console.log('Party fetch error (non-critical):', partyError.message);
       }
+    } else {
+      console.log('No party ID provided, using demo party data');
     }
 
     // For demo purposes, return a mock response instead of creating in DB
@@ -54,10 +105,13 @@ router.post('/simple', async (req, res) => {
       type: req.body.type || 'sales_order',
       status: 'draft',
       priority: req.body.priority || 'medium',
-      partyId: req.body.partyId,
+      partyId: partyId || null,
       partyInfo,
-      notes: `${req.body.type === 'sales_order' ? 'Customer' : 'Vendor'}: ${partyInfo.name}`,
+      // Use provided notes or generate default notes
+      notes: req.body.notes || `${req.body.type === 'sales_order' ? 'Customer' : 'Vendor'}: ${partyInfo.name}`,
       description: req.body.description || '',
+      price: req.body.price ? parseFloat(req.body.price) : 0,
+      grandTotal: req.body.price ? parseFloat(req.body.price) : 0,
       createdAt: new Date()
     };
 
@@ -72,12 +126,12 @@ router.post('/simple', async (req, res) => {
 });
 
 // Simple create job card endpoint (no auth for demo)
+// This endpoint is kept for API compatibility but is no longer directly called from the Orders page
 router.post('/job-cards/simple', async (req, res) => {
   try {
     console.log('Creating simple job card:', req.body);
     
     // For demo purposes, we'll just return a success response without actually creating in DB
-    // since JobCard has many required references that would be complex to set up
     const jobCardNumber = `JC-${Date.now()}`;
     
     const mockJobCard = {

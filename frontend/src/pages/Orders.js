@@ -19,9 +19,19 @@ import {
 
 const Orders = () => {
   const [activeTab, setActiveTab] = useState('orders');
-  const [orders, setOrders] = useState([]);
-  const [jobCards, setJobCards] = useState([]);
-  const [deliveryNotes, setDeliveryNotes] = useState([]);
+  // Initialize state from localStorage if available, otherwise empty arrays
+  const [orders, setOrders] = useState(() => {
+    const savedOrders = localStorage.getItem('erp-orders');
+    return savedOrders ? JSON.parse(savedOrders) : [];
+  });
+  const [jobCards, setJobCards] = useState(() => {
+    const savedJobCards = localStorage.getItem('erp-jobCards');
+    return savedJobCards ? JSON.parse(savedJobCards) : [];
+  });
+  const [deliveryNotes, setDeliveryNotes] = useState(() => {
+    const savedDeliveryNotes = localStorage.getItem('erp-deliveryNotes');
+    return savedDeliveryNotes ? JSON.parse(savedDeliveryNotes) : [];
+  });
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
@@ -33,66 +43,136 @@ const Orders = () => {
   const [customers, setCustomers] = useState([]);
   const [vendors, setVendors] = useState([]);
 
+  // Load customers and vendors only once when component mounts
+  useEffect(() => {
+    loadCustomersAndVendors();
+  }, []);
+  
+  // Fetch data whenever the active tab changes or when component mounts
   useEffect(() => {
     fetchData();
-    loadCustomersAndVendors();
+  }, [activeTab]);
+  
+  // Save orders to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('erp-orders', JSON.stringify(orders));
+  }, [orders]);
+  
+  // Save job cards to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('erp-jobCards', JSON.stringify(jobCards));
+  }, [jobCards]);
+  
+  // Save delivery notes to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('erp-deliveryNotes', JSON.stringify(deliveryNotes));
+  }, [deliveryNotes]);
+  
+  // Clear localStorage data when component unmounts to prevent stale data issues
+  useEffect(() => {
+    // Return cleanup function for when component unmounts
+    return () => {
+      // Don't actually clear the data on unmount because we want to persist between page navigations
+      // This is just a placeholder for future cleanup if needed
+      console.log('Orders component unmounted');
+    };
   }, []);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       
-      // Fetch real demo data from backend
-      const ordersResponse = await axios.get('/api/orders/demo/list');
-      setOrders(ordersResponse.data.orders || []);
+      // Only fetch data if we don't have any
+      if (activeTab === 'orders' && orders.length === 0) {
+        console.log('Fetching orders data from API...');
+        // Fetch real demo data from backend
+        const ordersResponse = await axios.get('/api/orders/demo/list');
+        
+        // Only set orders if we don't have any (initial load)
+        setOrders(prevOrders => prevOrders.length === 0 ? (ordersResponse.data.orders || []) : prevOrders);
+      }
       
-      // Mock job cards and delivery notes for now
-      const mockJobCards = [
-        {
-          _id: 'jc-001',
-          jobCardNumber: 'JC-001',
-          title: 'Manufacturing Job A',
-          order: { orderNumber: 'SO-001' },
-          status: 'in_progress',
-          priority: 'high',
-          assignedTo: { firstName: 'John', lastName: 'Doe' },
-          startDate: new Date('2025-08-05'),
-          targetCompletionDate: new Date('2025-08-12')
+      // For jobcards, only load mock data if we don't have any job cards yet
+      if (activeTab === 'job-cards' && jobCards.length === 0) {
+        console.log('Fetching job cards data...');
+        try {
+          // Try to get real data from API
+          const jobCardsResponse = await axios.get('/api/jobs');
+          setJobCards(prevCards => prevCards.length === 0 ? jobCardsResponse.data : prevCards);
+        } catch (jobCardError) {
+          console.error('Failed to fetch job cards, using mock data:', jobCardError);
+          
+          // Only set mock data if we don't have any
+          if (jobCards.length === 0) {
+            // Mock job cards for now
+            const mockJobCards = [
+              {
+                _id: 'jc-001',
+                jobCardNumber: 'JC-001',
+                title: 'Manufacturing Job A',
+                order: { orderNumber: 'SO-001' },
+                status: 'in_progress',
+                priority: 'high',
+                assignedTo: { firstName: 'John', lastName: 'Doe' },
+                startDate: new Date('2025-08-05'),
+                targetCompletionDate: new Date('2025-08-12')
+              }
+            ];
+            
+            setJobCards(prevCards => prevCards.length === 0 ? mockJobCards : prevCards);
+          }
         }
-      ];
-
-      const mockDeliveryNotes = [
-        {
-          _id: 'dn-001',
-          challanNumber: 'DN-001',
-          type: 'sales',
-          customer: { name: 'Acme Corp' },
-          status: 'delivered',
-          deliveryDate: new Date('2025-08-14'),
-          items: [{ item: { name: 'Product A' }, quantity: 10 }]
+      }
+      
+      // For delivery notes, only load mock data if we don't have any yet
+      if (activeTab === 'delivery-notes' && deliveryNotes.length === 0) {
+        console.log('Fetching delivery notes data...');
+        try {
+          // Try to get real data from API
+          const deliveryResponse = await axios.get('/api/orders/delivery-notes');
+          setDeliveryNotes(prevNotes => prevNotes.length === 0 ? deliveryResponse.data : prevNotes);
+        } catch (deliveryError) {
+          console.error('Failed to fetch delivery notes, using mock data:', deliveryError);
+          
+          // Only set mock data if we don't have any
+          if (deliveryNotes.length === 0) {
+            const mockDeliveryNotes = [
+              {
+                _id: 'dn-001',
+                challanNumber: 'DN-001',
+                type: 'sales',
+                customer: { name: 'Acme Corp' },
+                status: 'delivered',
+                deliveryDate: new Date('2025-08-14'),
+                items: [{ item: { name: 'Product A' }, quantity: 10 }]
+              }
+            ];
+            
+            setDeliveryNotes(prevNotes => prevNotes.length === 0 ? mockDeliveryNotes : prevNotes);
+          }
         }
-      ];
-
-      setJobCards(mockJobCards);
-      setDeliveryNotes(mockDeliveryNotes);
+      }
     } catch (error) {
-      console.error('Error fetching orders:', error);
-      // Fallback to mock data if API fails
-      const fallbackData = [
-        {
-          _id: 'so-fallback',
-          orderNumber: 'SO-DEMO',
-          type: 'sales_order',
-          customer: { name: 'Demo Customer' },
-          status: 'draft',
-          priority: 'medium',
-          orderDate: new Date(),
-          expectedDeliveryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-          grandTotal: 10000,
-          items: []
-        }
-      ];
-      setOrders(fallbackData);
+      console.error('Error fetching data:', error);
+      
+      // Fallback to mock data if API fails and we don't have any orders yet
+      if (activeTab === 'orders' && orders.length === 0) {
+        const fallbackData = [
+          {
+            _id: 'so-fallback',
+            orderNumber: 'SO-DEMO',
+            type: 'sales_order',
+            customer: { name: 'Demo Customer' },
+            status: 'draft',
+            priority: 'medium',
+            orderDate: new Date(),
+            expectedDeliveryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            grandTotal: 10000,
+            items: []
+          }
+        ];
+        setOrders(prevOrders => prevOrders.length === 0 ? fallbackData : prevOrders);
+      }
     } finally {
       setLoading(false);
     }
@@ -150,6 +230,8 @@ const Orders = () => {
     setSelectedOrder(null);
     setFormData({
       type: 'sales_order', // Default to sales order, user can change in the form
+      orderNumber: '', // New field for custom order number
+      price: '', // New field for order price
       customer: '',
       vendor: '',
       priority: 'medium',
@@ -201,18 +283,7 @@ const Orders = () => {
     }
   };
 
-  const handleCreateJobCard = (order) => {
-    setModalType('jobcard');
-    setSelectedOrder(order);
-    setFormData({
-      orderId: order._id,
-      title: `Job for ${order.orderNumber}`,
-      description: '',
-      priority: order.priority,
-      assignedTo: ''
-    });
-    setShowModal(true);
-  };
+  // Job card creation functionality has been removed
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -226,23 +297,33 @@ const Orders = () => {
         // Determine which party ID to use based on order type
         const partyId = formData.type === 'sales_order' ? formData.customer : formData.vendor;
         
-        // Ensure we have a valid party ID
+        // For demo purposes, don't require party ID
+        // Comment out the strict validation for now
+        /*
         if (!partyId && formData.type === 'sales_order') {
           throw new Error('Please select a customer');
         } else if (!partyId && formData.type === 'purchase_order') {
           throw new Error('Please select a vendor');
         }
+        */
         
         const payload = {
           type: formData.type,
-          partyId: partyId, // Send a single partyId instead of separate customer/vendor
+          orderNumber: formData.orderNumber, // Send custom order number if provided
+          partyId: partyId || 'demo-party', // Send partyId or fallback to demo
+          customer: formData.customer, // Also send customer ID separately
+          vendor: formData.vendor, // Also send vendor ID separately
           priority: formData.priority,
-          description: formData.notes
+          price: formData.price, // Send price information
+          notes: formData.notes,
+          description: formData.notes // Send as both for backward compatibility
         };
 
         console.log('Creating order with payload:', payload);
         
         try {
+          console.log('Sending order creation request to:', endpoint);
+          console.log('With payload:', JSON.stringify(payload, null, 2));
           const response = await axios.post(endpoint, payload);
           console.log('Order creation response:', response.data);
           
@@ -254,7 +335,7 @@ const Orders = () => {
           // Add to local state for demo
           const newOrder = {
             _id: response.data.order?._id || `new-${Date.now()}`,
-            orderNumber: response.data.order?.orderNumber || `${formData.type === 'sales_order' ? 'SO' : 'PO'}-${Date.now()}`,
+            orderNumber: response.data.order?.orderNumber || formData.orderNumber || `${formData.type === 'sales_order' ? 'SO' : 'PO'}-${Date.now()}`,
             type: formData.type,
             // Set customer or vendor based on order type
             customer: formData.type === 'sales_order' ? selectedParty : null,
@@ -263,12 +344,17 @@ const Orders = () => {
             priority: formData.priority,
             orderDate: new Date(),
             expectedDeliveryDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-            grandTotal: 0,
+            grandTotal: formData.price ? parseFloat(formData.price) : 0,
+            price: formData.price ? parseFloat(formData.price) : 0,
             items: [],
             notes: formData.notes
           };
           
-          setOrders(prev => [newOrder, ...prev]);
+          // Update both state and localStorage
+          const updatedOrders = [newOrder, ...orders];
+          setOrders(updatedOrders);
+          localStorage.setItem('erp-orders', JSON.stringify(updatedOrders));
+          
           alert('Order created successfully!');
         } catch (apiError) {
           console.error('API Error details:', apiError.response?.data || apiError.message);
@@ -301,33 +387,10 @@ const Orders = () => {
             : order
         );
         setOrders(updatedOrders);
+        localStorage.setItem('erp-orders', JSON.stringify(updatedOrders));
         alert('Order updated successfully!');
         
-      } else if (modalType === 'jobcard') {
-        // Create job card
-        const endpoint = '/api/orders/job-cards/simple';
-        const payload = {
-          title: formData.title,
-          description: formData.description,
-          priority: formData.priority
-        };
-
-        await axios.post(endpoint, payload);
-        
-        const newJobCard = {
-          _id: `jc-${Date.now()}`,
-          jobCardNumber: `JC-${Date.now()}`,
-          title: formData.title,
-          order: selectedOrder,
-          status: 'assigned',
-          priority: formData.priority,
-          description: formData.description,
-          startDate: new Date()
-        };
-        
-        setJobCards(prev => [newJobCard, ...prev]);
-        alert('Job card created successfully!');
-      }
+      } // Job card creation functionality has been removed
 
       setShowModal(false);
       setFormData({});
@@ -367,8 +430,8 @@ const Orders = () => {
     const matchesSearch = order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (order.customer?.name || order.vendor?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
-    const matchesTab = activeTab === 'orders'; // Show orders only in the orders tab
-    return matchesSearch && matchesStatus && matchesTab;
+    // We don't need to check activeTab here as we're already conditionally rendering based on it
+    return matchesSearch && matchesStatus;
   });
 
   if (loading) {
@@ -388,21 +451,39 @@ const Orders = () => {
       <div className="tabs">
         <button 
           className={`tab ${activeTab === 'orders' ? 'active' : ''}`}
-          onClick={() => setActiveTab('orders')}
+          onClick={() => {
+            // Only fetch data if we're switching tabs
+            if (activeTab !== 'orders') {
+              setActiveTab('orders');
+              // No need to force fetch here as the useEffect will handle it
+            }
+          }}
         >
           <ShoppingCart size={18} />
           Your Orders
         </button>
         <button 
-          className={`tab ${activeTab === 'jobcards' ? 'active' : ''}`}
-          onClick={() => setActiveTab('jobcards')}
+          className={`tab ${activeTab === 'job-cards' ? 'active' : ''}`}
+          onClick={() => {
+            // Only fetch data if we're switching tabs
+            if (activeTab !== 'job-cards') {
+              setActiveTab('job-cards');
+              // No need to force fetch here as the useEffect will handle it
+            }
+          }}
         >
           <FileText size={18} />
           Job Cards
         </button>
         <button 
-          className={`tab ${activeTab === 'delivery' ? 'active' : ''}`}
-          onClick={() => setActiveTab('delivery')}
+          className={`tab ${activeTab === 'delivery-notes' ? 'active' : ''}`}
+          onClick={() => {
+            // Only fetch data if we're switching tabs
+            if (activeTab !== 'delivery-notes') {
+              setActiveTab('delivery-notes');
+              // No need to force fetch here as the useEffect will handle it
+            }
+          }}
         >
           <Truck size={18} />
           Delivery Notes
@@ -487,11 +568,6 @@ const Orders = () => {
                       <button onClick={() => handleEditOrder(order)} title="Edit">
                         <Edit size={16} />
                       </button>
-                      {order.status === 'confirmed' && (
-                        <button onClick={() => handleCreateJobCard(order)} title="Create Job Card">
-                          <FileText size={16} />
-                        </button>
-                      )}
                     </div>
                   </div>
                   
@@ -543,14 +619,20 @@ const Orders = () => {
       )}
 
       {/* Job Cards Tab */}
-      {activeTab === 'jobcards' && (
+      {activeTab === 'job-cards' && (
         <div className="jobcards-section">
           <div className="section-header">
             <h2>Job Cards</h2>
             <p>Track production jobs and work orders</p>
           </div>
           <div className="cards-grid">
-            {jobCards.map(jobCard => (
+            {jobCards
+              .filter(jobCard => 
+                jobCard.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                jobCard.jobCardNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (jobCard.order?.orderNumber || '').toLowerCase().includes(searchTerm.toLowerCase())
+              )
+              .map(jobCard => (
               <div key={jobCard._id} className="job-card">
                 <div className="job-header">
                   <div>
@@ -577,14 +659,19 @@ const Orders = () => {
       )}
 
       {/* Delivery Notes Tab */}
-      {activeTab === 'delivery' && (
+      {activeTab === 'delivery-notes' && (
         <div className="delivery-section">
           <div className="section-header">
             <h2>Delivery Notes</h2>
             <p>Manage delivery documentation and tracking</p>
           </div>
           <div className="cards-grid">
-            {deliveryNotes.map(note => (
+            {deliveryNotes
+              .filter(note => 
+                note.challanNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                (note.customer?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+              )
+              .map(note => (
               <div key={note._id} className="delivery-card">
                 <div className="delivery-header">
                   <div>
@@ -615,7 +702,6 @@ const Orders = () => {
                 {modalType === 'create' && `Create ${formData.type === 'sales_order' ? 'Sales' : 'Purchase'} Order`}
                 {modalType === 'edit' && 'Edit Order'}
                 {modalType === 'view' && 'Order Details'}
-                {modalType === 'jobcard' && 'Create Job Card'}
               </h3>
               <button className="close-btn" onClick={() => setShowModal(false)}>
                 <X size={20} />
@@ -660,18 +746,44 @@ const Orders = () => {
                 {(modalType === 'create' || modalType === 'edit') && (
                   <>
                     {modalType === 'create' && (
-                      <div className="form-group">
-                        <label>Order Type</label>
-                        <select
-                          name="type"
-                          value={formData.type || ''}
-                          onChange={handleInputChange}
-                          required
-                        >
-                          <option value="sales_order">Sales Order</option>
-                          <option value="purchase_order">Purchase Order</option>
-                        </select>
-                      </div>
+                      <>
+                        <div className="form-group">
+                          <label>Order Type</label>
+                          <select
+                            name="type"
+                            value={formData.type || ''}
+                            onChange={handleInputChange}
+                            required
+                          >
+                            <option value="sales_order">Sales Order</option>
+                            <option value="purchase_order">Purchase Order</option>
+                          </select>
+                        </div>
+                        
+                        <div className="form-group">
+                          <label>Order Number (optional)</label>
+                          <input
+                            type="text"
+                            name="orderNumber"
+                            value={formData.orderNumber || ''}
+                            onChange={handleInputChange}
+                            placeholder="Enter custom order number or leave blank for auto-generated"
+                          />
+                        </div>
+                        
+                        <div className="form-group">
+                          <label>Price</label>
+                          <input
+                            type="number"
+                            name="price"
+                            value={formData.price || ''}
+                            onChange={handleInputChange}
+                            placeholder="Enter order price"
+                            step="0.01"
+                            min="0"
+                          />
+                        </div>
+                      </>
                     )}
 
                     {formData.type === 'sales_order' && (
@@ -758,52 +870,14 @@ const Orders = () => {
                   </>
                 )}
 
-                {modalType === 'jobcard' && (
-                  <>
-                    <div className="form-group">
-                      <label>Job Title</label>
-                      <input
-                        type="text"
-                        name="title"
-                        value={formData.title || ''}
-                        onChange={handleInputChange}
-                        placeholder="Job card title"
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Description</label>
-                      <textarea
-                        name="description"
-                        value={formData.description || ''}
-                        onChange={handleInputChange}
-                        placeholder="Job description and requirements"
-                        rows="4"
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Priority</label>
-                      <select
-                        name="priority"
-                        value={formData.priority || 'medium'}
-                        onChange={handleInputChange}
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
-                      </select>
-                    </div>
-                  </>
-                )}
+                {/* Job card creation form removed */}
 
                 <div className="form-actions">
                   <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
                     Cancel
                   </button>
                   <button type="submit" disabled={submitting} className="btn btn-primary">
-                    {submitting ? 'Processing...' : (modalType === 'create' ? 'Create' : modalType === 'edit' ? 'Update' : 'Create Job Card')}
+                    {submitting ? 'Processing...' : (modalType === 'create' ? 'Create' : 'Update')}
                   </button>
                 </div>
               </form>

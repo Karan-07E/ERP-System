@@ -32,7 +32,7 @@ export const PartyProvider = ({ children }) => {
       }).toString();
 
       console.log('[PartyContext] Fetching parties with params:', queryParams);
-      const response = await axios.get(`/parties?${queryParams}`);
+      const response = await axios.get(`/api/parties?${queryParams}`);
       
       if (response.data.success) {
         setParties(response.data.data.parties || []);
@@ -58,7 +58,7 @@ export const PartyProvider = ({ children }) => {
   const createParty = async (partyData) => {
     try {
       console.log('[PartyContext] Creating new party:', partyData);
-      const response = await axios.post('/parties', partyData);
+      const response = await axios.post('/api/parties', partyData);
       
       if (response.data.success) {
         // Refresh parties list
@@ -78,7 +78,7 @@ export const PartyProvider = ({ children }) => {
   const updateParty = async (partyId, partyData) => {
     try {
       console.log('[PartyContext] Updating party:', partyId, partyData);
-      const response = await axios.put(`/parties/${partyId}`, partyData);
+      const response = await axios.put(`/api/parties/${partyId}`, partyData);
       
       if (response.data.success) {
         // Refresh parties list
@@ -98,7 +98,7 @@ export const PartyProvider = ({ children }) => {
   const deleteParty = async (partyId) => {
     try {
       console.log('[PartyContext] Deleting party:', partyId);
-      const response = await axios.delete(`/parties/${partyId}`);
+      const response = await axios.delete(`/api/parties/${partyId}`);
       
       if (response.data.success) {
         // Refresh parties list

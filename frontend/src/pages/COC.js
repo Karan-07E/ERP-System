@@ -45,7 +45,7 @@ const COC = () => {
     const fetchCOCs = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/coc', {
+      const response = await axios.get('/api/coc', {
         headers: { Authorization: `Bearer ${token}` },
         params: {
           page: currentPage,
@@ -66,7 +66,7 @@ const COC = () => {
   const fetchJobs = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/jobs?status=completed', {
+      const response = await axios.get('/api/jobs?status=completed', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setJobs(response.data.jobs || []);
@@ -79,7 +79,7 @@ const COC = () => {
   const fetchCustomers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/parties?type=customer', {
+      const response = await axios.get('/api/parties?type=customer', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCustomers(response.data.parties || []);
@@ -93,7 +93,7 @@ const COC = () => {
       const token = localStorage.getItem('token');
       console.log('Creating COC with data:', formData);
       
-      const response = await axios.post('/coc', formData, {
+      const response = await axios.post('/api/coc', formData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -111,7 +111,7 @@ const COC = () => {
   const handleApproveCOC = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`/coc/${id}/approve`, {}, {
+      await axios.post(`/api/coc/${id}/approve`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       fetchCOCs();
@@ -124,7 +124,7 @@ const COC = () => {
   const handleDownloadPDF = async (cocId, cocNumber) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`/coc/${cocId}/pdf`, {
+      const response = await axios.get(`/api/coc/${cocId}/pdf`, {
         headers: { Authorization: `Bearer ${token}` },
         responseType: 'blob'
       });
