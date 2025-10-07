@@ -11,7 +11,7 @@
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "seed:dimension-reports": "node scripts/seed-dimension-reports.js"
-  },
+  }, 
   "dependencies": {
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
