@@ -30,9 +30,16 @@ const dimensionReportsRoutes = require('./routes/dimensionReports');
 const app = express();
 const server = createServer(app);
 
-// Environment detection
-const isProduction = process.env.NODE_ENV === 'production';
+// Environment detection - Force production mode on Render
+const isRenderDeployment = process.env.RENDER || process.env.DATABASE_URL?.includes('render') || process.env.PORT;
+const isProduction = process.env.NODE_ENV === 'production' || isRenderDeployment;
 const PORT = process.env.PORT || 5000;
+
+// Set NODE_ENV to production if on Render but not explicitly set
+if (isRenderDeployment && process.env.NODE_ENV !== 'production') {
+  process.env.NODE_ENV = 'production';
+  console.log('🔧 Detected Render deployment, forcing NODE_ENV=production');
+}
 
 // Frontend URL configuration
 const FRONTEND_URL = process.env.FRONTEND_URL || 
@@ -41,6 +48,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL ||
 console.log(`🌟 Starting server in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
 console.log(`🔗 Frontend URL: ${FRONTEND_URL}`);
 console.log(`🗄️ Database URL configured: ${!!process.env.DATABASE_URL}`);
+console.log(`🚀 Render deployment detected: ${isRenderDeployment}`);
 
 // Simple test route - should work before any middleware
 app.get('/test', (req, res) => {
@@ -282,10 +290,17 @@ app.post('/api/seed', async (req, res) => {
 if (isProduction) {
   console.log('🎭 Setting up static file serving for production...');
   
-  // Serve static files from React build
-  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  const buildPath = path.join(__dirname, '../frontend/build');
+  const fs = require('fs');
   
-  console.log('✅ Static files configured');
+  // Check if build directory exists
+  if (fs.existsSync(buildPath)) {
+    app.use(express.static(buildPath));
+    console.log(`✅ Static files configured from: ${buildPath}`);
+  } else {
+    console.warn(`⚠️ Build directory not found: ${buildPath}`);
+    console.log('📁 Available directories:', fs.readdirSync(path.join(__dirname, '..')));
+  }
 }
 
 // Error handling middleware
@@ -303,14 +318,30 @@ if (isProduction) {
     // Only serve React app for non-API routes
     if (!req.path.startsWith('/api/')) {
       const htmlPath = path.join(__dirname, '../frontend/build', 'index.html');
-      console.log(`📄 Serving React app for path: ${req.path}`);
-      res.sendFile(htmlPath);
+      const fs = require('fs');
+      
+      // Check if index.html exists
+      if (fs.existsSync(htmlPath)) {
+        console.log(`📄 Serving React app for path: ${req.path}`);
+        res.sendFile(htmlPath);
+      } else {
+        console.error(`❌ React build not found: ${htmlPath}`);
+        res.status(404).json({ 
+          message: 'Frontend build not found - please build the frontend first',
+          path: req.path,
+          method: req.method,
+          environment: 'production',
+          buildPath: htmlPath,
+          timestamp: new Date().toISOString()
+        });
+      }
     } else {
       console.log(`❌ API route not found: ${req.method} ${req.path}`);
       res.status(404).json({ 
         message: 'API route not found',
         path: req.path,
         method: req.method,
+        environment: 'production',
         timestamp: new Date().toISOString()
       });
     }
@@ -320,10 +351,11 @@ if (isProduction) {
   app.use('*', (req, res) => {
     console.log(`❌ Route not found in development: ${req.method} ${req.path}`);
     res.status(404).json({ 
-      message: 'Route not found',
+      message: 'Route not found - server running in development mode',
       path: req.path,
       method: req.method,
       environment: 'development',
+      note: 'Set NODE_ENV=production for production deployment',
       timestamp: new Date().toISOString()
     });
   });
