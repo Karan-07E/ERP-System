@@ -4,7 +4,7 @@ import { getValidToken } from '../utils/tokenUtils';
 // Configure axios for API calls
 export const API_BASE_URL = process.env.REACT_APP_API_URL || (
   process.env.NODE_ENV === 'production' 
-    ? 'https://eee111.onrender.com'
+    ? 'https://erp-system-rmum.onrender.com'
     : ''  // Empty base URL for development
 );
 

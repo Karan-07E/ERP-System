@@ -122,33 +122,50 @@ router.post('/login', validate(userSchemas.login), async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log(`🔐 Login attempt for email: ${email}`);
+
     // Find user by email
     const user = await User.findOne({ where: { email } });
     if (!user) {
+      console.log(`❌ User not found: ${email}`);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+    console.log(`✅ User found: ${user.username}`);
+
     // Check if user is active
     if (!user.isActive) {
+      console.log(`❌ User account deactivated: ${email}`);
       return res.status(400).json({ message: 'Account is deactivated' });
     }
 
     // Verify password
-    const isMatch = user.comparePassword(password);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
+      console.log(`❌ Password mismatch for: ${email}`);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
+
+    console.log(`✅ Password verified for: ${email}`);
 
     // Update last login
     user.lastLogin = new Date();
     await user.save();
 
+    // Ensure JWT_SECRET exists
+    if (!process.env.JWT_SECRET) {
+      console.error('❌ JWT_SECRET not configured');
+      return res.status(500).json({ message: 'Server configuration error' });
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       { userId: user.id },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
     );
+
+    console.log(`🎫 Token generated for: ${email}`);
 
     res.json({
       message: 'Login successful',
@@ -159,14 +176,17 @@ router.post('/login', validate(userSchemas.login), async (req, res) => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role,
+        role: user.roles ? user.roles[0] : 'production', // Get first role
         permissions: user.permissions,
         lastLogin: user.lastLogin
       }
     });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+    console.error('💥 Login error:', error);
+    res.status(500).json({ 
+      message: 'Server error during login',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -264,13 +284,54 @@ router.get('/verify', auth, async (req, res) => {
         email: req.user.email,
         firstName: req.user.firstName,
         lastName: req.user.lastName,
-        role: req.user.role,
+        role: req.user.roles ? req.user.roles[0] : 'production',
         permissions: req.user.permissions
       }
     });
   } catch (error) {
     console.error('Token verification error:', error);
     res.status(500).json({ message: 'Server error during token verification' });
+  }
+});
+
+// Create default admin user (for testing)
+router.post('/create-admin', async (req, res) => {
+  try {
+    // Check if admin already exists
+    const existingAdmin = await User.findOne({ where: { email: 'admin@erp.com' } });
+    if (existingAdmin) {
+      return res.status(400).json({ message: 'Admin user already exists' });
+    }
+
+    // Create admin user
+    const admin = await User.create({
+      username: 'admin',
+      email: 'admin@erp.com',
+      password: 'admin123',
+      firstName: 'System',
+      lastName: 'Administrator',
+      roles: ['admin'],
+      permissions: [
+        { module: 'all', actions: ['create', 'read', 'update', 'delete'] }
+      ]
+    });
+
+    res.status(201).json({
+      message: 'Admin user created successfully',
+      user: {
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        firstName: admin.firstName,
+        lastName: admin.lastName
+      }
+    });
+  } catch (error) {
+    console.error('Admin creation error:', error);
+    res.status(500).json({ 
+      message: 'Error creating admin user',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

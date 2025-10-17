@@ -43,7 +43,7 @@ if (isRenderDeployment && process.env.NODE_ENV !== 'production') {
 
 // Frontend URL configuration
 const FRONTEND_URL = process.env.FRONTEND_URL || 
-  (isProduction ? 'https://eee111.onrender.com' : 'http://localhost:3000');
+  (isProduction ? 'https://erp-system-rmum.onrender.com' : 'http://localhost:3000');
 
 console.log(`🌟 Starting server in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
 console.log(`🔗 Frontend URL: ${FRONTEND_URL}`);
