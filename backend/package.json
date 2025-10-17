@@ -7,10 +7,17 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "build": "npm install",
+    "postinstall": "echo 'Backend dependencies installed successfully'",
     "test": "jest",
+    "test:health": "curl http://localhost:5000/health || echo 'Health check failed'",
+    "test:api": "node scripts/test-api.js",
+    "verify:routes": "node scripts/verify-routes.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
-    "seed:dimension-reports": "node scripts/seed-dimension-reports.js"
+    "seed:dimension-reports": "node scripts/seed-dimension-reports.js",
+    "db:setup": "npm run migrate && npm run seed",
+    "logs": "tail -f logs/app.log",
+    "check:routes": "node -e \"console.log('Testing routes...'); require('./routes/auth'); console.log('✅ Routes loaded successfully');\""
   }, 
   "dependencies": {
     "bcrypt": "^6.0.0",

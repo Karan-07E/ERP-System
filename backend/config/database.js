@@ -3,31 +3,47 @@ const { Sequelize } = require('sequelize');
 // Load environment variables
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
-// Database configuration
-// Support both DATABASE_URL (for Render) and individual config (for local development)
-const sequelize = process.env.DATABASE_URL 
-  ? new Sequelize(process.env.DATABASE_URL, {
+// Enhanced database configuration for Render deployment
+const createSequelizeInstance = () => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (process.env.DATABASE_URL) {
+    console.log('🗄️ Using DATABASE_URL for connection');
+    
+    return new Sequelize(process.env.DATABASE_URL, {
       dialect: 'postgres',
       logging: process.env.NODE_ENV === 'development' ? console.log : false,
       dialectOptions: {
-        ssl: process.env.NODE_ENV === 'production' ? {
+        ssl: isProduction ? {
           require: true,
           rejectUnauthorized: false
-        } : false
+        } : false,
+        // Additional options for Render
+        connectTimeout: 30000,
+        socketTimeout: 30000,
+        idleTimeoutMillis: 30000
       },
       pool: {
         max: 20,
         min: 0,
-        acquire: 30000,
-        idle: 10000
+        acquire: 60000,    // Increased for Render
+        idle: 10000,
+        evict: 1000,
+        handleDisconnects: true
       },
       define: {
         timestamps: true,
         underscored: true,
         freezeTableName: true
+      },
+      retry: {
+        max: 3
       }
-    })
-  : new Sequelize(
+    });
+  } else {
+    console.log('🗄️ Using individual database credentials');
+    
+    return new Sequelize(
       process.env.DB_NAME || 'erp_development',
       process.env.DB_USER || 'postgres',
       process.env.DB_PASSWORD || 'password',
@@ -49,5 +65,9 @@ const sequelize = process.env.DATABASE_URL
         }
       }
     );
+  }
+};
+
+const sequelize = createSequelizeInstance();
 
 module.exports = sequelize;
