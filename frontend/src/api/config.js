@@ -30,9 +30,11 @@ axios.interceptors.request.use((config) => {
   
   const isPublicRoute = publicRoutes.some(route => config.url === route || config.url?.endsWith(route));
   
+  let token = null;
+  
   if (!isPublicRoute) {
     // Only add token for protected routes
-    const token = getValidToken();
+    token = getValidToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
       console.log('🎫 Token attached to request:', config.method?.toUpperCase(), config.url);
