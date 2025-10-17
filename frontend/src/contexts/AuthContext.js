@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }) => {
       const token = getValidToken();
       
       if (token) {
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        // DO NOT set axios defaults here - let the interceptor handle it
         // Verify with the server
         const response = await axios.get('/api/auth/verify');
         if (response.data.valid) {
@@ -56,12 +56,12 @@ export const AuthProvider = ({ children }) => {
       } else {
         // If token doesn't exist or is expired, clear it
         localStorage.removeItem('token');
-        delete axios.defaults.headers.common['Authorization'];
+        localStorage.removeItem('user');
       }
     } catch (error) {
       console.error('Auth check failed:', error);
       localStorage.removeItem('token');
-      delete axios.defaults.headers.common['Authorization'];
+      localStorage.removeItem('user');
     } finally {
       setLoading(false);
     }
@@ -92,17 +92,50 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/api/auth/login', { email, password });
-      const { token, user } = response.data;
+      console.log('🔐 AuthContext: Attempting login for', email);
+      console.log('📝 Login data being sent:', { 
+        email: email.trim(), 
+        password: password ? '[HIDDEN]' : 'MISSING',
+        emailLength: email.trim().length,
+        passwordLength: password?.length || 0
+      });
       
-      localStorage.setItem('token', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
+      const loginData = { 
+        email: email.trim(), 
+        password: password 
+      };
       
-      toast.success('Login successful!');
-      return { success: true };
+      console.log('📡 Making POST request to /api/auth/login');
+      
+      const response = await axios.post('/api/auth/login', loginData);
+      
+      console.log('✅ Login response:', response.status, response.data);
+      
+      if (response.data.success && response.data.token) {
+        const { token, user } = response.data;
+        
+        // Store token in localStorage
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        
+        // DO NOT set axios defaults here - let the interceptor handle it
+        setUser(user);
+        
+        toast.success('Login successful!');
+        return { success: true };
+      } else {
+        throw new Error(response.data.message || 'Invalid response format');
+      }
     } catch (error) {
-      const message = error.response?.data?.message || 'Login failed';
+      console.error('❌ Login error:', error);
+      
+      let message = 'Login failed';
+      if (error.response?.data?.message) {
+        message = error.response.data.message;
+      } else if (error.message) {
+        message = error.message;
+      }
+      
       toast.error(message);
       return { success: false, message };
     }
@@ -110,7 +143,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = (showNotification = true) => {
     localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
+    localStorage.removeItem('user');
+    // DO NOT delete axios defaults - let the interceptor handle it
     setUser(null);
     
     // Only show the toast notification if requested

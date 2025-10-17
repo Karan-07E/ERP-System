@@ -87,13 +87,10 @@ const Login = () => {
             <h3>Demo Credentials:</h3>
             <div className="credentials-list">
               <div className="credential-item">
-                <strong>Admin:</strong> admin@company.com / admin123
+                <strong>Admin:</strong> admin@eee.com / admin123
               </div>
               <div className="credential-item">
-                <strong>Manager:</strong> manager@erpsystem.com / manager123
-              </div>
-              <div className="credential-item">
-                <strong>Accountant:</strong> accountant@erpsystem.com / accountant123
+                <em>More users will be created after initial setup</em>
               </div>
             </div>
           </div>

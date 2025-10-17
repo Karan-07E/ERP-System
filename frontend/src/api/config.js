@@ -17,23 +17,40 @@ axios.defaults.baseURL = API_BASE_URL;
 
 // Add request interceptor for authentication and debugging
 axios.interceptors.request.use((config) => {
-  // Get valid token (not expired) and add it to headers
-  const token = getValidToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-    console.log('🎫 Token attached to request:', config.method?.toUpperCase(), config.url);
-  } else {
-    console.log('❌ No valid token for request:', config.method?.toUpperCase(), config.url);
-    // If token is expired, remove it and force re-login
-    const existingToken = localStorage.getItem('token');
-    if (existingToken) {
-      localStorage.removeItem('token');
-      // Only redirect if not already on login page and not a token verification request
-      if (!window.location.pathname.includes('/login') && !config.url.includes('/auth/verify')) {
-        console.log('🔄 Redirecting to login due to expired token');
-        window.location.href = '/login';
+  // Define routes that DON'T need authentication tokens
+  const publicRoutes = [
+    '/api/auth/login',
+    '/api/auth/register', 
+    '/api/auth/create-admin',
+    '/api/auth/migrate',
+    '/api/auth/debug',
+    '/health',
+    '/test'
+  ];
+  
+  const isPublicRoute = publicRoutes.some(route => config.url === route || config.url?.endsWith(route));
+  
+  if (!isPublicRoute) {
+    // Only add token for protected routes
+    const token = getValidToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log('🎫 Token attached to request:', config.method?.toUpperCase(), config.url);
+    } else {
+      console.log('❌ No valid token for protected route:', config.method?.toUpperCase(), config.url);
+      // If token is expired, remove it and force re-login
+      const existingToken = localStorage.getItem('token');
+      if (existingToken) {
+        localStorage.removeItem('token');
+        // Only redirect if not already on login page
+        if (!window.location.pathname.includes('/login')) {
+          console.log('🔄 Redirecting to login due to expired token');
+          window.location.href = '/login';
+        }
       }
     }
+  } else {
+    console.log('🔓 Public route, no token required:', config.method?.toUpperCase(), config.url);
   }
   
   // Enhanced logging for debugging

@@ -120,11 +120,16 @@ router.post('/register', validate(userSchemas.register), async (req, res) => {
 // Login user - NO AUTH MIDDLEWARE REQUIRED
 router.post('/login', async (req, res) => {
   try {
+    console.log('🔐 LOGIN REQUEST RECEIVED');
+    console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+    console.log('� Request headers:', JSON.stringify(req.headers, null, 2));
+    console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+    console.log(`🔑 JWT_SECRET configured: ${!!process.env.JWT_SECRET}`);
+    
     const { email, password } = req.body;
 
     console.log(`🔐 Production Login attempt for email: ${email}`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
-    console.log(`🔑 JWT_SECRET configured: ${!!process.env.JWT_SECRET}`);
+    console.log(`🔒 Password provided: ${!!password}`);
 
     // Validate input
     if (!email || !password) {
@@ -132,7 +137,8 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ 
         success: false,
         message: 'Email and password are required',
-        code: 'MISSING_CREDENTIALS'
+        code: 'MISSING_CREDENTIALS',
+        received: { email: !!email, password: !!password }
       });
     }
 
