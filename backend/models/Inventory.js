@@ -188,7 +188,7 @@ const GRN = sequelize.define('GRN', {
     type: DataTypes.UUID,
     allowNull: false,
     references: {
-      model: 'vendors',
+      model: 'parties',
       key: 'id'
     }
   },

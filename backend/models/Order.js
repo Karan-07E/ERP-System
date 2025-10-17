@@ -30,18 +30,18 @@ const Order = sequelize.define('Order', {
       key: 'id'
     }
   },
-  // Keeping legacy fields for backward compatibility during migration
+  // Legacy fields updated to reference unified parties table
   customer: {
     type: DataTypes.UUID,
     references: {
-      model: 'customers',
+      model: 'parties',
       key: 'id'
     }
   },
   vendor: {
     type: DataTypes.UUID,
     references: {
-      model: 'vendors',
+      model: 'parties',
       key: 'id'
     }
   },
@@ -272,14 +272,14 @@ const DeliveryChallan = sequelize.define('DeliveryChallan', {
   customer: {
     type: DataTypes.UUID,
     references: {
-      model: 'customers',
+      model: 'parties',
       key: 'id'
     }
   },
   vendor: {
     type: DataTypes.UUID,
     references: {
-      model: 'vendors',
+      model: 'parties',
       key: 'id'
     }
   },

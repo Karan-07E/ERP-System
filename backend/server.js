@@ -127,52 +127,41 @@ app.use(fileUpload({
 app.use('/uploads', express.static('uploads'));
 
 // Database connection and migration
+// Database initialization with production migration
 async function initializeDatabase() {
   try {
-    console.log('🔄 Connecting to PostgreSQL...');
-    console.log(`📍 Database URL present: ${!!process.env.DATABASE_URL}`);
-    console.log(`📍 JWT_SECRET present: ${!!process.env.JWT_SECRET}`);
-    
+    console.log('� Testing database connection...');
     await sequelize.authenticate();
-    console.log('✅ Connected to PostgreSQL successfully');
+    console.log('✅ Database connection established successfully');
     
-    // Test a simple query to ensure everything works
-    const result = await sequelize.query('SELECT NOW() as current_time');
-    console.log(`🕒 Database time: ${result[0][0].current_time}`);
+    // Use production migration for comprehensive setup
+    const productionMigrate = require('./scripts/production-migrate');
     
-    // CRITICAL: Check if tables exist and run migrations if needed
-    try {
-      await sequelize.query('SELECT 1 FROM users LIMIT 1');
-      console.log('📋 Database tables verified - already migrated');
-    } catch (tableError) {
-      console.log('🚧 Tables not found - running migrations...');
-      
-      // Force sync with alter for production
-      await sequelize.sync({ alter: true, force: false });
-      console.log('✅ Database tables created successfully');
-      
-      // Create basic indexes
-      try {
-        await sequelize.query(`
-          CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-          CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-          CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
-        `);
-        console.log('📊 Basic indexes created');
-      } catch (indexError) {
-        console.warn('⚠️ Index creation warning:', indexError.message);
-      }
-    }
+    console.log('� Running production migration...');
+    const migrationResult = await productionMigrate();
     
-    console.log('🎉 Database initialization completed successfully');
+    console.log('🎉 Production migration completed successfully');
+    console.log(`� Migration results:`, migrationResult);
+    
     return true;
   } catch (err) {
     console.error('❌ Database initialization error:', {
       message: err.message,
       code: err.code,
-      errno: err.errno
+      errno: err.errno,
+      stack: err.stack
     });
-    throw err;
+    
+    // Fallback to basic sync if production migration fails
+    console.log('� Attempting fallback database sync...');
+    try {
+      await sequelize.sync({ alter: true, force: false });
+      console.log('✅ Fallback sync completed');
+      return true;
+    } catch (fallbackErr) {
+      console.error('❌ Fallback sync also failed:', fallbackErr.message);
+      throw fallbackErr;
+    }
   }
 }
 

@@ -219,14 +219,14 @@ const InspectionReport = sequelize.define('InspectionReport', {
   customer: {
     type: DataTypes.UUID,
     references: {
-      model: 'customers',
+      model: 'parties',
       key: 'id'
     }
   },
   vendor: {
     type: DataTypes.UUID,
     references: {
-      model: 'vendors',
+      model: 'parties',
       key: 'id'
     }
   },
