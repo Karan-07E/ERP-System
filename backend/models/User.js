@@ -11,7 +11,12 @@ const User = sequelize.define('User', {
   userId: {
     type: DataTypes.STRING(20),
     allowNull: false,
-    unique: true
+    unique: true,
+    defaultValue: () => {
+      // Generate a default userId if not provided
+      const timestamp = Date.now().toString().slice(-6);
+      return `USR${timestamp}`;
+    }
   },
   username: {
     type: DataTypes.STRING(50),
@@ -93,7 +98,9 @@ const User = sequelize.define('User', {
   timestamps: true,
   hooks: {
     beforeCreate: async (user) => {
-      // Generate unique user ID if not provided
+      console.log('🔨 User beforeCreate hook triggered for:', user.username);
+      
+      // ALWAYS generate userId if not provided
       if (!user.userId) {
         try {
           // Count existing users and increment
@@ -102,33 +109,66 @@ const User = sequelize.define('User', {
           
           // Check if this number is already taken (in case of manual assignments)
           let isUnique = false;
-          while (!isUnique) {
+          let attempts = 0;
+          while (!isUnique && attempts < 10) {
             const testUserId = `USR${nextNumber.toString().padStart(4, '0')}`;
             const existingUser = await User.findOne({ where: { userId: testUserId } });
             if (!existingUser) {
               user.userId = testUserId;
               isUnique = true;
+              console.log('🆔 Generated userId:', testUserId);
             } else {
               nextNumber++;
+              attempts++;
             }
+          }
+          
+          // If still no unique ID found, use timestamp
+          if (!isUnique) {
+            const timestamp = Date.now().toString().slice(-6);
+            user.userId = `USR${timestamp}`;
+            console.log('🆔 Timestamp-based userId:', user.userId);
           }
         } catch (error) {
           // Fallback to timestamp-based ID if there's an error
-          const timestamp = Date.now().toString().slice(-4);
+          const timestamp = Date.now().toString().slice(-6);
           user.userId = `USR${timestamp}`;
+          console.log('🆔 Error fallback userId:', user.userId);
+          console.error('⚠️ UserId generation error:', error.message);
         }
+      }
+      
+      // Ensure userId is never null
+      if (!user.userId) {
+        const randomId = Math.random().toString(36).substr(2, 6).toUpperCase();
+        user.userId = `USR${randomId}`;
+        console.log('🆔 Random fallback userId:', user.userId);
       }
       
       // Hash password
       if (user.password) {
-        const saltRounds = 10;
-        user.password = await bcrypt.hash(user.password, saltRounds);
+        try {
+          console.log('🔐 Hashing password for user:', user.username);
+          const saltRounds = 10;
+          user.password = await bcrypt.hash(user.password, saltRounds);
+          console.log('✅ Password hashed successfully');
+        } catch (hashError) {
+          console.error('💥 Password hashing error:', hashError);
+          throw new Error('Failed to hash password: ' + hashError.message);
+        }
       }
     },
     beforeUpdate: async (user) => {
       if (user.changed('password')) {
-        const saltRounds = 10;
-        user.password = await bcrypt.hash(user.password, saltRounds);
+        try {
+          console.log('🔐 Updating password hash for user:', user.username);
+          const saltRounds = 10;
+          user.password = await bcrypt.hash(user.password, saltRounds);
+          console.log('✅ Password hash updated successfully');
+        } catch (hashError) {
+          console.error('💥 Password hash update error:', hashError);
+          throw new Error('Failed to update password hash: ' + hashError.message);
+        }
       }
     }
   }
@@ -137,9 +177,23 @@ const User = sequelize.define('User', {
 // Instance method to compare password using bcrypt
 User.prototype.comparePassword = async function(candidatePassword) {
   try {
-    return await bcrypt.compare(candidatePassword, this.password);
+    console.log('🔑 Comparing password for user:', this.username);
+    
+    if (!candidatePassword || !this.password) {
+      console.log('❌ Missing password or candidate password');
+      return false;
+    }
+
+    const result = await bcrypt.compare(candidatePassword, this.password);
+    console.log('🔑 Password comparison result:', result);
+    return result;
   } catch (error) {
-    console.error('Password comparison error:', error);
+    console.error('💥 Password comparison error:', {
+      message: error.message,
+      username: this.username,
+      hasPassword: !!this.password,
+      hasCandidatePassword: !!candidatePassword
+    });
     return false;
   }
 };

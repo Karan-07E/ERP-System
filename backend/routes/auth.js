@@ -124,14 +124,28 @@ router.post('/login', validate(userSchemas.login), async (req, res) => {
 
     console.log(`🔐 Login attempt for email: ${email}`);
 
-    // Find user by email
-    const user = await User.findOne({ where: { email } });
-    if (!user) {
-      console.log(`❌ User not found: ${email}`);
-      return res.status(400).json({ message: 'Invalid credentials' });
+    // Validate JWT_SECRET first
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only';
+    if (!process.env.JWT_SECRET) {
+      console.warn('⚠️ JWT_SECRET not set, using fallback');
     }
 
-    console.log(`✅ User found: ${user.username}`);
+    // Find user by email (case insensitive)
+    const user = await User.findOne({ 
+      where: { 
+        email: email.toLowerCase() 
+      } 
+    });
+    
+    if (!user) {
+      console.log(`❌ User not found: ${email}`);
+      return res.status(400).json({ 
+        message: 'Invalid credentials',
+        debug: process.env.NODE_ENV === 'development' ? 'User not found' : undefined
+      });
+    }
+
+    console.log(`✅ User found: ${user.username}, ID: ${user.id}`);
 
     // Check if user is active
     if (!user.isActive) {
@@ -140,52 +154,90 @@ router.post('/login', validate(userSchemas.login), async (req, res) => {
     }
 
     // Verify password
-    const isMatch = await user.comparePassword(password);
+    let isMatch = false;
+    try {
+      isMatch = await user.comparePassword(password);
+      console.log(`🔑 Password verification result: ${isMatch}`);
+    } catch (passwordError) {
+      console.error('💥 Password comparison error:', passwordError);
+      return res.status(500).json({ 
+        message: 'Authentication system error',
+        debug: process.env.NODE_ENV === 'development' ? passwordError.message : undefined
+      });
+    }
+
     if (!isMatch) {
       console.log(`❌ Password mismatch for: ${email}`);
-      return res.status(400).json({ message: 'Invalid credentials' });
+      return res.status(400).json({ 
+        message: 'Invalid credentials',
+        debug: process.env.NODE_ENV === 'development' ? 'Password mismatch' : undefined
+      });
     }
 
     console.log(`✅ Password verified for: ${email}`);
 
     // Update last login
-    user.lastLogin = new Date();
-    await user.save();
-
-    // Ensure JWT_SECRET exists
-    if (!process.env.JWT_SECRET) {
-      console.error('❌ JWT_SECRET not configured');
-      return res.status(500).json({ message: 'Server configuration error' });
+    try {
+      user.lastLogin = new Date();
+      await user.save();
+    } catch (saveError) {
+      console.warn('⚠️ Could not update last login:', saveError.message);
+      // Don't fail login for this
     }
 
     // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
-    );
+    let token;
+    try {
+      token = jwt.sign(
+        { 
+          userId: user.id,
+          email: user.email,
+          username: user.username
+        },
+        jwtSecret,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+      );
+      console.log(`🎫 Token generated for: ${email}`);
+    } catch (tokenError) {
+      console.error('💥 Token generation error:', tokenError);
+      return res.status(500).json({ 
+        message: 'Token generation failed',
+        debug: process.env.NODE_ENV === 'development' ? tokenError.message : undefined
+      });
+    }
 
-    console.log(`🎫 Token generated for: ${email}`);
+    const responseUser = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.roles && user.roles.length > 0 ? user.roles[0] : 'production',
+      permissions: user.permissions || [],
+      lastLogin: user.lastLogin
+    };
+
+    console.log(`🎉 Login successful for: ${email}`);
 
     res.json({
       message: 'Login successful',
       token,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.roles ? user.roles[0] : 'production', // Get first role
-        permissions: user.permissions,
-        lastLogin: user.lastLogin
-      }
+      user: responseUser
     });
+
   } catch (error) {
-    console.error('💥 Login error:', error);
+    console.error('💥 Login route error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     res.status(500).json({ 
       message: 'Server error during login',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        type: error.name
+      } : undefined
     });
   }
 });
@@ -297,15 +349,43 @@ router.get('/verify', auth, async (req, res) => {
 // Create default admin user (for testing)
 router.post('/create-admin', async (req, res) => {
   try {
-    // Check if admin already exists
-    const existingAdmin = await User.findOne({ where: { email: 'admin@erp.com' } });
+    console.log('🔧 Attempting to create admin user...');
+    
+    // Check if any admin already exists
+    const existingAdmin = await User.findOne({ 
+      where: { 
+        email: { [Op.or]: ['admin@erp.com', 'admin@company.com'] }
+      } 
+    });
+    
     if (existingAdmin) {
-      return res.status(400).json({ message: 'Admin user already exists' });
+      console.log('ℹ️ Admin user already exists');
+      return res.status(200).json({ 
+        message: 'Admin user already exists',
+        existingUser: {
+          id: existingAdmin.id,
+          email: existingAdmin.email,
+          username: existingAdmin.username
+        }
+      });
+    }
+
+    console.log('🆕 Creating new admin user...');
+
+    // Find a unique username
+    let username = 'admin';
+    let usernameExists = await User.findOne({ where: { username } });
+    let counter = 1;
+    
+    while (usernameExists) {
+      username = `admin${counter}`;
+      usernameExists = await User.findOne({ where: { username } });
+      counter++;
     }
 
     // Create admin user
     const admin = await User.create({
-      username: 'admin',
+      username: username,
       email: 'admin@erp.com',
       password: 'admin123',
       firstName: 'System',
@@ -315,6 +395,8 @@ router.post('/create-admin', async (req, res) => {
         { module: 'all', actions: ['create', 'read', 'update', 'delete'] }
       ]
     });
+
+    console.log('✅ Admin user created successfully:', admin.id);
 
     res.status(201).json({
       message: 'Admin user created successfully',
@@ -327,10 +409,58 @@ router.post('/create-admin', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Admin creation error:', error);
+    console.error('💥 Admin creation error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     res.status(500).json({ 
       message: 'Error creating admin user',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        type: error.name,
+        details: error.stack
+      } : undefined
+    });
+  }
+});
+
+// Debug route to check database and users
+router.get('/debug', async (req, res) => {
+  try {
+    console.log('🔍 Debug route accessed');
+    
+    // Check database connection
+    const { sequelize } = require('../models');
+    await sequelize.authenticate();
+    
+    // Count users
+    const userCount = await User.count();
+    
+    // Get first few users (without passwords)
+    const users = await User.findAll({
+      attributes: ['id', 'username', 'email', 'firstName', 'lastName', 'roles', 'isActive'],
+      limit: 5
+    });
+    
+    res.json({
+      message: 'Debug information',
+      database: 'connected',
+      userCount,
+      users,
+      environment: process.env.NODE_ENV,
+      hasJwtSecret: !!process.env.JWT_SECRET,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('💥 Debug route error:', error);
+    res.status(500).json({
+      message: 'Debug route failed',
+      error: {
+        message: error.message,
+        type: error.name
+      }
     });
   }
 });
