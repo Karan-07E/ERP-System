@@ -426,6 +426,74 @@ router.post('/create-admin', async (req, res) => {
   }
 });
 
+// Migration endpoint for production setup
+router.post('/migrate', async (req, res) => {
+  try {
+    console.log('🚧 Running production database migration...');
+    
+    const { sequelize } = require('../models');
+    
+    // Check if already migrated
+    try {
+      await sequelize.query('SELECT 1 FROM users LIMIT 1');
+      return res.status(200).json({
+        message: 'Database already migrated',
+        timestamp: new Date().toISOString()
+      });
+    } catch (tableError) {
+      console.log('📋 Tables not found, running migration...');
+    }
+    
+    // Run migration
+    await sequelize.sync({ alter: true, force: false });
+    console.log('✅ Tables created successfully');
+    
+    // Create indexes
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+      CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+      CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
+    `);
+    
+    // Create default admin user
+    const existingAdmin = await User.findOne({ 
+      where: { email: 'admin@company.com' }
+    });
+    
+    if (!existingAdmin) {
+      const admin = await User.create({
+        username: 'admin',
+        email: 'admin@company.com',
+        password: 'admin123',
+        firstName: 'System',
+        lastName: 'Administrator',
+        roles: ['admin'],
+        permissions: [
+          { module: 'all', actions: ['create', 'read', 'update', 'delete'] }
+        ]
+      });
+      console.log('👤 Default admin user created');
+    }
+    
+    res.status(201).json({
+      message: 'Database migration completed successfully',
+      tables_created: true,
+      admin_user: existingAdmin ? 'exists' : 'created',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('💥 Migration error:', error);
+    res.status(500).json({
+      message: 'Migration failed',
+      error: {
+        message: error.message,
+        type: error.name
+      }
+    });
+  }
+});
+
 // Debug route to check database and users
 router.get('/debug', async (req, res) => {
   try {
@@ -435,22 +503,33 @@ router.get('/debug', async (req, res) => {
     const { sequelize } = require('../models');
     await sequelize.authenticate();
     
-    // Count users
-    const userCount = await User.count();
+    // Check if tables exist
+    let tablesExist = false;
+    let userCount = 0;
+    let users = [];
     
-    // Get first few users (without passwords)
-    const users = await User.findAll({
-      attributes: ['id', 'username', 'email', 'firstName', 'lastName', 'roles', 'isActive'],
-      limit: 5
-    });
+    try {
+      userCount = await User.count();
+      tablesExist = true;
+      
+      // Get first few users (without passwords)
+      users = await User.findAll({
+        attributes: ['id', 'username', 'email', 'firstName', 'lastName', 'roles', 'isActive'],
+        limit: 5
+      });
+    } catch (tableError) {
+      console.log('⚠️ Tables do not exist:', tableError.message);
+    }
     
     res.json({
       message: 'Debug information',
       database: 'connected',
+      tablesExist,
       userCount,
       users,
       environment: process.env.NODE_ENV,
       hasJwtSecret: !!process.env.JWT_SECRET,
+      hasDatabaseUrl: !!process.env.DATABASE_URL,
       timestamp: new Date().toISOString()
     });
   } catch (error) {

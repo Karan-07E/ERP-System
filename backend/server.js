@@ -131,6 +131,7 @@ async function initializeDatabase() {
   try {
     console.log('🔄 Connecting to PostgreSQL...');
     console.log(`📍 Database URL present: ${!!process.env.DATABASE_URL}`);
+    console.log(`📍 JWT_SECRET present: ${!!process.env.JWT_SECRET}`);
     
     await sequelize.authenticate();
     console.log('✅ Connected to PostgreSQL successfully');
@@ -139,10 +140,31 @@ async function initializeDatabase() {
     const result = await sequelize.query('SELECT NOW() as current_time');
     console.log(`🕒 Database time: ${result[0][0].current_time}`);
     
-    // Skip sync since enhanced migration was already run
-    console.log('📋 Database already synchronized via enhanced migration script');
-    console.log('🎉 Database initialization completed successfully');
+    // CRITICAL: Check if tables exist and run migrations if needed
+    try {
+      await sequelize.query('SELECT 1 FROM users LIMIT 1');
+      console.log('📋 Database tables verified - already migrated');
+    } catch (tableError) {
+      console.log('🚧 Tables not found - running migrations...');
+      
+      // Force sync with alter for production
+      await sequelize.sync({ alter: true, force: false });
+      console.log('✅ Database tables created successfully');
+      
+      // Create basic indexes
+      try {
+        await sequelize.query(`
+          CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+          CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+          CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
+        `);
+        console.log('📊 Basic indexes created');
+      } catch (indexError) {
+        console.warn('⚠️ Index creation warning:', indexError.message);
+      }
+    }
     
+    console.log('🎉 Database initialization completed successfully');
     return true;
   } catch (err) {
     console.error('❌ Database initialization error:', {

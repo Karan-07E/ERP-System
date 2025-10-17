@@ -4,30 +4,78 @@ const { User } = require('../models');
 // Authentication middleware
 const auth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    const authHeader = req.header('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    
+    console.log(`🔐 Auth middleware - Path: ${req.path}, Token present: ${!!token}`);
     
     if (!token) {
-      return res.status(401).json({ message: 'No token, authorization denied' });
+      console.log('❌ No token provided');
+      return res.status(401).json({ 
+        message: 'No token, authorization denied',
+        path: req.path,
+        method: req.method
+      });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Check if JWT_SECRET exists
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('❌ JWT_SECRET not configured');
+      return res.status(500).json({ 
+        message: 'Server configuration error - JWT_SECRET missing',
+        path: req.path
+      });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, jwtSecret);
+      console.log(`✅ Token verified for userId: ${decoded.userId}`);
+    } catch (jwtError) {
+      console.log('❌ JWT verification failed:', jwtError.message);
+      return res.status(401).json({ 
+        message: 'Token is not valid',
+        error: jwtError.message,
+        path: req.path
+      });
+    }
+
     const user = await User.findByPk(decoded.userId, {
       attributes: { exclude: ['password'] }
     });
     
     if (!user) {
-      return res.status(401).json({ message: 'Token is not valid' });
+      console.log(`❌ User not found for ID: ${decoded.userId}`);
+      return res.status(401).json({ 
+        message: 'Token is not valid - user not found',
+        userId: decoded.userId,
+        path: req.path
+      });
     }
 
     if (!user.isActive) {
-      return res.status(401).json({ message: 'User account is deactivated' });
+      console.log(`❌ User account deactivated: ${user.email}`);
+      return res.status(401).json({ 
+        message: 'User account is deactivated',
+        path: req.path
+      });
     }
 
+    console.log(`✅ Authentication successful for: ${user.email}`);
     req.user = user;
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
-    res.status(401).json({ message: 'Token is not valid' });
+    console.error('💥 Auth middleware error:', {
+      message: error.message,
+      stack: error.stack,
+      path: req.path
+    });
+    res.status(401).json({ 
+      message: 'Authentication failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal error',
+      path: req.path
+    });
   }
 };
 
