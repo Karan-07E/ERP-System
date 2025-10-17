@@ -117,40 +117,75 @@ router.post('/register', validate(userSchemas.register), async (req, res) => {
   }
 });
 
-// Login user
-router.post('/login', validate(userSchemas.login), async (req, res) => {
+// Login user - NO AUTH MIDDLEWARE REQUIRED
+router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log(`🔐 Login attempt for email: ${email}`);
+    console.log(`🔐 Production Login attempt for email: ${email}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+    console.log(`🔑 JWT_SECRET configured: ${!!process.env.JWT_SECRET}`);
+
+    // Validate input
+    if (!email || !password) {
+      console.log('❌ Missing email or password');
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email and password are required',
+        code: 'MISSING_CREDENTIALS'
+      });
+    }
 
     // Validate JWT_SECRET first
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only';
-    if (!process.env.JWT_SECRET) {
-      console.warn('⚠️ JWT_SECRET not set, using fallback');
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('❌ JWT_SECRET not configured in production');
+      return res.status(500).json({ 
+        success: false,
+        message: 'Server configuration error - contact administrator',
+        code: 'JWT_SECRET_MISSING'
+      });
     }
 
     // Find user by email (case insensitive)
-    const user = await User.findOne({ 
-      where: { 
-        email: email.toLowerCase() 
-      } 
-    });
+    let user;
+    try {
+      user = await User.findOne({ 
+        where: { 
+          email: {
+            [Op.iLike]: email.toLowerCase() // Case insensitive for PostgreSQL
+          }
+        } 
+      });
+      console.log(`🔍 Database query completed for: ${email}`);
+    } catch (dbError) {
+      console.error('💥 Database error during user lookup:', dbError);
+      return res.status(500).json({ 
+        success: false,
+        message: 'Database connection error',
+        code: 'DB_ERROR'
+      });
+    }
     
     if (!user) {
       console.log(`❌ User not found: ${email}`);
       return res.status(400).json({ 
-        message: 'Invalid credentials',
-        debug: process.env.NODE_ENV === 'development' ? 'User not found' : undefined
+        success: false,
+        message: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS'
       });
     }
 
-    console.log(`✅ User found: ${user.username}, ID: ${user.id}`);
+    console.log(`✅ User found: ${user.username}, ID: ${user.id}, Active: ${user.isActive}`);
 
     // Check if user is active
     if (!user.isActive) {
       console.log(`❌ User account deactivated: ${email}`);
-      return res.status(400).json({ message: 'Account is deactivated' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Account is deactivated',
+        code: 'ACCOUNT_DEACTIVATED'
+      });
     }
 
     // Verify password
@@ -161,16 +196,18 @@ router.post('/login', validate(userSchemas.login), async (req, res) => {
     } catch (passwordError) {
       console.error('💥 Password comparison error:', passwordError);
       return res.status(500).json({ 
-        message: 'Authentication system error',
-        debug: process.env.NODE_ENV === 'development' ? passwordError.message : undefined
+        success: false,
+        message: 'Password verification failed',
+        code: 'PASSWORD_SYSTEM_ERROR'
       });
     }
 
     if (!isMatch) {
       console.log(`❌ Password mismatch for: ${email}`);
       return res.status(400).json({ 
-        message: 'Invalid credentials',
-        debug: process.env.NODE_ENV === 'development' ? 'Password mismatch' : undefined
+        success: false,
+        message: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS'
       });
     }
 
@@ -220,6 +257,7 @@ router.post('/login', validate(userSchemas.login), async (req, res) => {
     console.log(`🎉 Login successful for: ${email}`);
 
     res.json({
+      success: true,
       message: 'Login successful',
       token,
       user: responseUser
@@ -229,11 +267,14 @@ router.post('/login', validate(userSchemas.login), async (req, res) => {
     console.error('💥 Login route error:', {
       message: error.message,
       stack: error.stack,
-      name: error.name
+      name: error.name,
+      timestamp: new Date().toISOString()
     });
     
     res.status(500).json({ 
+      success: false,
       message: 'Server error during login',
+      code: 'LOGIN_SERVER_ERROR',
       error: process.env.NODE_ENV === 'development' ? {
         message: error.message,
         type: error.name

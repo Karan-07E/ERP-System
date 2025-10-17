@@ -55,9 +55,63 @@ export const isTokenExpired = (token) => {
  */
 export const getValidToken = () => {
   const token = localStorage.getItem('token');
-  if (token && !isTokenExpired(token)) {
-    return token;
+  
+  if (!token) {
+    console.log('🔍 No token found in localStorage');
+    return null;
   }
-  // Token doesn't exist or is expired
-  return null;
+  
+  if (isTokenExpired(token)) {
+    console.log('⏰ Token expired, removing from localStorage');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    return null;
+  }
+  
+  console.log('✅ Valid token found');
+  return token;
+};
+
+/**
+ * Set token in localStorage with validation
+ * @param {string} token - JWT token to store
+ * @returns {boolean} - Success status
+ */
+export const setToken = (token) => {
+  try {
+    if (!token || isTokenExpired(token)) {
+      console.error('❌ Attempted to store invalid or expired token');
+      return false;
+    }
+    
+    localStorage.setItem('token', token);
+    console.log('✅ Token stored successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ Error storing token:', error);
+    return false;
+  }
+};
+
+/**
+ * Remove token and user data from localStorage
+ */
+export const clearTokens = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  console.log('🗑️ Tokens cleared from localStorage');
+};
+
+/**
+ * Get user data from localStorage
+ * @returns {object|null} - User data or null if not found
+ */
+export const getStoredUser = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  } catch (error) {
+    console.error('❌ Error parsing stored user data:', error);
+    return null;
+  }
 };

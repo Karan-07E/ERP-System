@@ -1,15 +1,16 @@
 import axios from 'axios';
 import { getValidToken } from '../utils/tokenUtils';
 
-// Configure axios for API calls - Production Ready
+// Production-Ready API Configuration
 export const API_BASE_URL = process.env.REACT_APP_API_URL || (
   process.env.NODE_ENV === 'production' 
-    ? 'https://erp-system-rmum.onrender.com'
-    : 'http://localhost:5000'  // Updated for backend port
+    ? window.location.origin  // Use same domain as frontend in production
+    : 'http://localhost:5000'
 );
 
 console.log('🔗 API Base URL:', API_BASE_URL);
 console.log('🌟 Environment:', process.env.NODE_ENV);
+console.log('🌍 Window Origin:', window.location.origin);
 
 // Set default base URL
 axios.defaults.baseURL = API_BASE_URL;
